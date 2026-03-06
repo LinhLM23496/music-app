@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore = AppSettingsStore.shared
-    @StateObject private var vm = MusicLibraryViewModel()
+    @StateObject private var vm = MusicLibraryViewModel(settingsStore: .shared)
 
     var body: some View {
         TabView {

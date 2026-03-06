@@ -1,7 +1,9 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import CryptoKit
 
+@MainActor
 final class MusicLibraryViewModel: ObservableObject {
     struct ImportResult {
         let importedCount: Int
@@ -66,7 +68,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private var pauseLiveUpdatesUntil: Date = .distantPast
     private var lastPersistedSnapshotSecond: Int = -1
 
-    init(settingsStore: AppSettingsStore = .shared) {
+    init(settingsStore: AppSettingsStore) {
         self.settingsStore = settingsStore
         language = settingsStore.language
         isShuffleOn = settingsStore.shuffleEnabled
@@ -104,14 +106,9 @@ final class MusicLibraryViewModel: ObservableObject {
         restorePlaybackSnapshotIfAvailable()
     }
 
-    deinit {
-        persistPlaybackSnapshotForCurrentTrack()
-        cleanupPlayerObservers()
-        cancelSleepTimer()
-    }
-
     var featuredSongs: [Song] {
-        songs.filter { featuredSongIDs.contains($0.id) }
+        let featuredSet = Set(featuredSongIDs)
+        return songs.filter { featuredSet.contains($0.id) }
     }
 
     var favoriteSongs: [Song] {
@@ -417,7 +414,8 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func songs(in playlist: Playlist) -> [Song] {
-        songs.filter { playlist.songIDs.contains($0.id) }
+        let songMap = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
+        return playlist.songIDs.compactMap { songMap[$0] }
     }
 
     func refreshDeviceTracks() {
@@ -430,7 +428,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
         ioQueue.async { [weak self] in
             let tracks = Self.loadDeviceTracks(in: musicFolderURL)
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.deviceTracks = tracks
             }
         }
@@ -480,7 +478,7 @@ final class MusicLibraryViewModel: ObservableObject {
             let result = ImportResult(importedCount: imported, skippedCount: skipped, failedCount: failed)
             let tracks = Self.loadDeviceTracks(in: destinationFolder)
 
-            DispatchQueue.main.async {
+            Task { @MainActor [weak self] in
                 self?.deviceTracks = tracks
                 completion(result)
             }
@@ -498,7 +496,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
     func songForDeviceTrack(_ track: LocalAudioTrack) -> Song {
         Song(
-            id: UUID(),
+            id: stableSongID(forLocalPath: track.url.path),
             titleEN: track.displayName,
             titleVI: track.displayName,
             artist: localized("device.artist"),
@@ -566,28 +564,8 @@ final class MusicLibraryViewModel: ObservableObject {
     private func observePlayer(player: AVPlayer, item: AVPlayerItem, fallbackDuration: Double) {
         let interval = CMTime(seconds: 0.2, preferredTimescale: 600)
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            guard let self else { return }
-            if Date() < self.pauseLiveUpdatesUntil { return }
-
-            let seconds = time.seconds
-            if seconds.isFinite {
-                self.playbackProgress.currentTime = max(0, seconds)
-            }
-
-            let duration = item.duration.seconds
-            if duration.isFinite, duration > 0 {
-                self.playbackProgress.duration = duration
-            } else {
-                self.playbackProgress.duration = fallbackDuration
-            }
-
-            let total = self.playbackProgress.duration > 0 ? self.playbackProgress.duration : fallbackDuration
-            self.playbackProgress.progress = min(max(self.playbackProgress.currentTime / max(total, 0.001), 0), 1)
-
-            let wholeSecond = Int(self.playbackProgress.currentTime.rounded(.down))
-            if wholeSecond >= 0, wholeSecond % 5 == 0, wholeSecond != self.lastPersistedSnapshotSecond {
-                self.lastPersistedSnapshotSecond = wholeSecond
-                self.persistPlaybackSnapshotForCurrentTrack(position: self.playbackProgress.currentTime)
+            Task { @MainActor [weak self] in
+                self?.handlePeriodicTimeUpdate(time: time, item: item, fallbackDuration: fallbackDuration)
             }
         }
 
@@ -596,7 +574,34 @@ final class MusicLibraryViewModel: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            self?.handleSongDidFinish()
+            Task { @MainActor [weak self] in
+                self?.handleSongDidFinish()
+            }
+        }
+    }
+
+    private func handlePeriodicTimeUpdate(time: CMTime, item: AVPlayerItem, fallbackDuration: Double) {
+        if Date() < pauseLiveUpdatesUntil { return }
+
+        let seconds = time.seconds
+        if seconds.isFinite {
+            playbackProgress.currentTime = max(0, seconds)
+        }
+
+        let duration = item.duration.seconds
+        if duration.isFinite, duration > 0 {
+            playbackProgress.duration = duration
+        } else {
+            playbackProgress.duration = fallbackDuration
+        }
+
+        let total = playbackProgress.duration > 0 ? playbackProgress.duration : fallbackDuration
+        playbackProgress.progress = min(max(playbackProgress.currentTime / max(total, 0.001), 0), 1)
+
+        let wholeSecond = Int(playbackProgress.currentTime.rounded(.down))
+        if wholeSecond >= 0, wholeSecond % 5 == 0, wholeSecond != lastPersistedSnapshotSecond {
+            lastPersistedSnapshotSecond = wholeSecond
+            persistPlaybackSnapshotForCurrentTrack(position: playbackProgress.currentTime)
         }
     }
 
@@ -680,7 +685,7 @@ final class MusicLibraryViewModel: ObservableObject {
         }
     }
 
-    private static func loadDeviceTracks(in root: URL) -> [LocalAudioTrack] {
+    nonisolated private static func loadDeviceTracks(in root: URL) -> [LocalAudioTrack] {
         let allowedExtensions = Set(["mp3", "m4a", "wav", "aac"])
         let files = allAudioFiles(in: root, allowedExtensions: allowedExtensions)
 
@@ -698,7 +703,7 @@ final class MusicLibraryViewModel: ObservableObject {
             }
     }
 
-    private static func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
+    nonisolated private static func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -714,6 +719,19 @@ final class MusicLibraryViewModel: ObservableObject {
             result.append(url)
         }
         return result
+    }
+
+    private func stableSongID(forLocalPath path: String) -> UUID {
+        let digest = SHA256.hash(data: Data(path.utf8))
+        var bytes = Array(digest.prefix(16))
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+
+        let uuid = uuid_t(bytes[0], bytes[1], bytes[2], bytes[3],
+                          bytes[4], bytes[5], bytes[6], bytes[7],
+                          bytes[8], bytes[9], bytes[10], bytes[11],
+                          bytes[12], bytes[13], bytes[14], bytes[15])
+        return UUID(uuid: uuid)
     }
 
     private func bindSettingsStore() {
