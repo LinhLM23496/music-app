@@ -1,24 +1,29 @@
-//
-//  ContentView.swift
-//  MusicApp
-//
-//  Created by Linh Le on 6/3/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @StateObject private var settingsStore = AppSettingsStore.shared
+    @StateObject private var vm = MusicLibraryViewModel()
 
-#Preview {
-    ContentView()
+    var body: some View {
+        TabView {
+            HomeTabView()
+                .tabItem {
+                    Label(vm.localized("tab.home"), systemImage: "house.fill")
+                }
+
+            PlaylistTabView()
+                .tabItem {
+                    Label(vm.localized("tab.playlist"), systemImage: "music.note.list")
+                }
+
+            InfoTabView()
+                .tabItem {
+                    Label(vm.localized("tab.info"), systemImage: "person.crop.circle")
+                }
+        }
+        .tint(.green)
+        .preferredColorScheme(.dark)
+        .environmentObject(vm)
+        .environmentObject(settingsStore)
+    }
 }

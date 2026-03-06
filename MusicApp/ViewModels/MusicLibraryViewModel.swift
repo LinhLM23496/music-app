@@ -1,0 +1,600 @@
+import SwiftUI
+import Combine
+import AVFoundation
+
+final class MusicLibraryViewModel: ObservableObject {
+    @Published var songs: [Song]
+    @Published var deviceTracks: [LocalAudioTrack] = []
+    @Published var featuredSongIDs: [UUID]
+    @Published var favoriteSongIDs: Set<UUID>
+    @Published var playlists: [Playlist]
+    @Published var language: AppLanguage {
+        didSet {
+            if settingsStore.language != language {
+                settingsStore.language = language
+            }
+        }
+    }
+
+    @Published var currentSongID: UUID?
+    @Published var isPlaying = false
+    let playbackProgress = PlaybackProgressState()
+    @Published var isShuffleOn: Bool {
+        didSet {
+            if settingsStore.shuffleEnabled != isShuffleOn {
+                settingsStore.shuffleEnabled = isShuffleOn
+            }
+        }
+    }
+    @Published var repeatMode: RepeatMode {
+        didSet {
+            if settingsStore.repeatMode != repeatMode {
+                settingsStore.repeatMode = repeatMode
+            }
+        }
+    }
+    @Published var queueSongs: [Song]
+    @Published var queueIndex: Int
+    @Published var playbackSpeed: Double = 1.0
+    @Published var sleepTimerRemaining: Double?
+
+    let user = AppUser(username: "LinhLe", avatarSymbol: "person.crop.circle.fill", appVersion: "1.0.0")
+
+    private var player: AVPlayer?
+    private var timeObserverToken: Any?
+    private var didPlayToEndObserver: NSObjectProtocol?
+    private let settingsStore: AppSettingsStore
+    private var cancellables = Set<AnyCancellable>()
+    private var activeSong: Song?
+    private var sleepTimerWorkItem: DispatchWorkItem?
+    private var sleepTimerEndDate: Date?
+    private var sleepTimerTicker: AnyCancellable?
+    private var pauseLiveUpdatesUntil: Date = .distantPast
+
+    init(settingsStore: AppSettingsStore = .shared) {
+        self.settingsStore = settingsStore
+        language = settingsStore.language
+        isShuffleOn = settingsStore.shuffleEnabled
+        repeatMode = settingsStore.repeatMode
+
+        let demoSongs: [Song] = [
+            Song(id: UUID(), titleEN: "Afterglow", titleVI: "Dư Âm Hoàng Hôn", artist: "Nova Lane", album: "Neon Nights", coverSymbol: "music.note.tv", audioFileName: "demo_track_1.wav", localFilePath: nil, duration: 228, accent: .pink),
+            Song(id: UUID(), titleEN: "Ocean Drive", titleVI: "Đường Ven Biển", artist: "Skyline Echo", album: "City Pulse", coverSymbol: "car.fill", audioFileName: "demo_track_2.wav", localFilePath: nil, duration: 201, accent: .blue),
+            Song(id: UUID(), titleEN: "Dream Circuit", titleVI: "Mạch Mơ", artist: "Synth Bloom", album: "Pulse", coverSymbol: "waveform.path.ecg", audioFileName: "demo_track_3.wav", localFilePath: nil, duration: 245, accent: .mint),
+            Song(id: UUID(), titleEN: "Golden Hour", titleVI: "Giờ Vàng", artist: "Maya Quill", album: "Sunset Tape", coverSymbol: "sun.max.fill", audioFileName: "demo_track_1.wav", localFilePath: nil, duration: 231, accent: .orange),
+            Song(id: UUID(), titleEN: "Lost in Motion", titleVI: "Lạc Trong Chuyển Động", artist: "Vera K", album: "Midnight Run", coverSymbol: "figure.run", audioFileName: "demo_track_2.wav", localFilePath: nil, duration: 214, accent: .purple),
+            Song(id: UUID(), titleEN: "Moonline", titleVI: "Đường Trăng", artist: "Ari Voss", album: "Night Signals", coverSymbol: "moon.stars.fill", audioFileName: "demo_track_3.wav", localFilePath: nil, duration: 196, accent: .cyan)
+        ]
+
+        songs = demoSongs
+        featuredSongIDs = Array(demoSongs.prefix(4).map(\.id))
+        favoriteSongIDs = Set([demoSongs[0].id, demoSongs[2].id])
+        playlists = [
+            Playlist(id: UUID(), nameEN: "Late Night Focus", nameVI: "Tập Trung Đêm Khuya", coverSymbol: "moon.fill", songIDs: [demoSongs[0].id, demoSongs[3].id, demoSongs[5].id]),
+            Playlist(id: UUID(), nameEN: "Morning Boost", nameVI: "Năng Lượng Sáng", coverSymbol: "sunrise.fill", songIDs: [demoSongs[1].id, demoSongs[2].id]),
+            Playlist(id: UUID(), nameEN: "Weekend Chill", nameVI: "Thư Giãn Cuối Tuần", coverSymbol: "beach.umbrella.fill", songIDs: [demoSongs[4].id])
+        ]
+
+        queueSongs = demoSongs
+        queueIndex = 0
+        activeSong = demoSongs.first
+        currentSongID = demoSongs.first?.id
+
+        refreshDeviceTracks()
+        bindSettingsStore()
+    }
+
+    deinit {
+        cleanupPlayerObservers()
+        cancelSleepTimer()
+    }
+
+    var featuredSongs: [Song] {
+        songs.filter { featuredSongIDs.contains($0.id) }
+    }
+
+    var favoriteSongs: [Song] {
+        songs.filter { favoriteSongIDs.contains($0.id) }
+    }
+
+    var currentSong: Song? {
+        if let activeSong {
+            return activeSong
+        }
+
+        guard let currentSongID else { return nil }
+        return songs.first(where: { $0.id == currentSongID })
+    }
+
+    var sleepTimerText: String? {
+        guard let remaining = sleepTimerRemaining, remaining > 0 else { return nil }
+        let total = Int(remaining)
+        let minute = total / 60
+        let second = total % 60
+        let time = String(format: "%d:%02d", minute, second)
+        return String(format: localized("player.sleep.remaining"), time)
+    }
+
+    func localized(_ key: String) -> String {
+        Localizer.string(key, language: language)
+    }
+
+    func songsCountText(_ count: Int) -> String {
+        String(format: localized("songs.count"), count)
+    }
+
+    func localizedSongTitle(_ song: Song) -> String {
+        song.localizedTitle(for: language)
+    }
+
+    func localizedPlaylistName(_ playlist: Playlist) -> String {
+        playlist.localizedName(for: language)
+    }
+
+    func repeatModeTitle() -> String {
+        localized(repeatMode.localizationKey)
+    }
+
+    func song(for id: UUID) -> Song? {
+        songs.first(where: { $0.id == id })
+    }
+
+    func play(song: Song) {
+        let autoQueue = suggestedQueue(for: song)
+        play(song: song, in: autoQueue)
+    }
+
+    func play(song: Song, in queue: [Song]) {
+        let safeQueue = queue.isEmpty ? [song] : queue
+        queueSongs = safeQueue
+
+        if let index = safeQueue.firstIndex(where: { isSameTrack($0, song) }) {
+            queueIndex = index
+        } else {
+            queueSongs.insert(song, at: 0)
+            queueIndex = 0
+        }
+
+        activeSong = queueSongs[queueIndex]
+        currentSongID = activeSong?.id
+        loadAndPlay(song: queueSongs[queueIndex])
+    }
+
+    func playFromQueue(index: Int) {
+        guard queueSongs.indices.contains(index) else { return }
+        play(song: queueSongs[index], in: queueSongs)
+    }
+
+    func togglePlayPause() {
+        guard let player else {
+            if let song = currentSong {
+                loadAndPlay(song: song)
+            }
+            return
+        }
+
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        } else {
+            player.playImmediately(atRate: Float(playbackSpeed))
+            isPlaying = true
+        }
+    }
+
+    func setPlaybackSpeed(_ speed: Double) {
+        playbackSpeed = speed
+        if isPlaying {
+            player?.rate = Float(speed)
+        }
+    }
+
+    func setSleepTimer(minutes: Double?) {
+        cancelSleepTimer()
+
+        guard let minutes, minutes > 0 else {
+            return
+        }
+
+        let duration = minutes * 60
+        sleepTimerRemaining = duration
+        sleepTimerEndDate = Date().addingTimeInterval(duration)
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.player?.pause()
+            self.isPlaying = false
+            self.cancelSleepTimer()
+        }
+        sleepTimerWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
+
+        sleepTimerTicker = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self, let endDate = self.sleepTimerEndDate else { return }
+                let remaining = max(0, endDate.timeIntervalSinceNow)
+                self.sleepTimerRemaining = remaining
+            }
+    }
+
+    func cancelSleepTimer() {
+        sleepTimerWorkItem?.cancel()
+        sleepTimerWorkItem = nil
+        sleepTimerEndDate = nil
+        sleepTimerRemaining = nil
+        sleepTimerTicker?.cancel()
+        sleepTimerTicker = nil
+    }
+
+    func pauseLiveProgressUpdates(seconds: Double) {
+        pauseLiveUpdatesUntil = Date().addingTimeInterval(seconds)
+    }
+
+    func resumeLiveProgressUpdates() {
+        pauseLiveUpdatesUntil = .distantPast
+    }
+
+    func seek(to normalizedProgress: Double) {
+        guard let player else { return }
+
+        let duration = playbackProgress.duration > 0 ? playbackProgress.duration : (currentSong?.duration ?? 1)
+        let clamped = min(max(normalizedProgress, 0), 1)
+        let seconds = duration * clamped
+        let target = CMTime(seconds: seconds, preferredTimescale: 600)
+
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+        playbackProgress.progress = clamped
+        playbackProgress.currentTime = seconds
+    }
+
+    func displayDuration(for song: Song) -> Double {
+        if isSameTrack(song, currentSong), playbackProgress.duration > 0 {
+            return playbackProgress.duration
+        }
+        return song.duration
+    }
+
+    func toggleFavorite(for song: Song) {
+        if favoriteSongIDs.contains(song.id) {
+            favoriteSongIDs.remove(song.id)
+        } else {
+            favoriteSongIDs.insert(song.id)
+        }
+    }
+
+    func nextSong() {
+        advanceToNext(autoTriggered: false)
+    }
+
+    func previousSong() {
+        guard !queueSongs.isEmpty else { return }
+
+        if playbackProgress.currentTime > 3 {
+            seek(to: 0)
+            return
+        }
+
+        if isShuffleOn, queueSongs.count > 1 {
+            var randomIndex = queueIndex
+            while randomIndex == queueIndex {
+                randomIndex = Int.random(in: 0..<queueSongs.count)
+            }
+            play(song: queueSongs[randomIndex], in: queueSongs)
+            return
+        }
+
+        let previousIndex = queueIndex - 1
+        if previousIndex >= 0 {
+            play(song: queueSongs[previousIndex], in: queueSongs)
+            return
+        }
+
+        if repeatMode == .all, let last = queueSongs.indices.last {
+            play(song: queueSongs[last], in: queueSongs)
+        } else {
+            seek(to: 0)
+        }
+    }
+
+    func cycleRepeatMode() {
+        switch repeatMode {
+        case .off:
+            repeatMode = .all
+        case .all:
+            repeatMode = .one
+        case .one:
+            repeatMode = .off
+        }
+    }
+
+    func createPlaylist(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        playlists.insert(
+            Playlist(
+                id: UUID(),
+                nameEN: trimmed,
+                nameVI: trimmed,
+                coverSymbol: "music.note.list",
+                songIDs: []
+            ),
+            at: 0
+        )
+    }
+
+    func deletePlaylist(at offsets: IndexSet) {
+        playlists.remove(atOffsets: offsets)
+    }
+
+    func addSong(_ song: Song, to playlistID: UUID) {
+        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        if !playlists[playlistIndex].songIDs.contains(song.id) {
+            playlists[playlistIndex].songIDs.append(song.id)
+            playlists[playlistIndex].coverSymbol = song.coverSymbol
+        }
+    }
+
+    func songs(in playlist: Playlist) -> [Song] {
+        songs.filter { playlist.songIDs.contains($0.id) }
+    }
+
+    func refreshDeviceTracks() {
+        guard let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            deviceTracks = []
+            return
+        }
+
+        let extensions = Set(["mp3", "m4a", "wav", "aac"])
+        let files = allAudioFiles(in: documentsURL, allowedExtensions: extensions)
+
+        deviceTracks = files
+            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+            .map { url in
+                let duration = AVURLAsset(url: url).duration.seconds
+                return LocalAudioTrack(
+                    id: url,
+                    url: url,
+                    fileName: url.lastPathComponent,
+                    displayName: url.deletingPathExtension().lastPathComponent,
+                    duration: duration.isFinite && duration > 0 ? duration : 180
+                )
+            }
+    }
+
+    func songForDeviceTrack(_ track: LocalAudioTrack) -> Song {
+        Song(
+            id: UUID(),
+            titleEN: track.displayName,
+            titleVI: track.displayName,
+            artist: localized("device.artist"),
+            album: localized("home.device.music"),
+            coverSymbol: "iphone.gen3",
+            audioFileName: track.fileName,
+            localFilePath: track.url.path,
+            duration: track.duration,
+            accent: .green
+        )
+    }
+
+    private func suggestedQueue(for song: Song) -> [Song] {
+        if songs.contains(where: { $0.id == song.id }) {
+            return songs
+        }
+
+        if song.localFilePath != nil {
+            let deviceQueue = deviceTracks.map(songForDeviceTrack)
+            if !deviceQueue.isEmpty {
+                return deviceQueue
+            }
+        }
+
+        return [song]
+    }
+
+    private func loadAndPlay(song: Song) {
+        cleanupPlayerObservers()
+
+        guard let url = audioURL(for: song) else {
+            isPlaying = false
+            playbackProgress.progress = 0
+            playbackProgress.currentTime = 0
+            playbackProgress.duration = song.duration
+            return
+        }
+
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        self.player = player
+
+        observePlayer(player: player, item: item, fallbackDuration: song.duration)
+        player.playImmediately(atRate: Float(playbackSpeed))
+        isPlaying = true
+    }
+
+    private func observePlayer(player: AVPlayer, item: AVPlayerItem, fallbackDuration: Double) {
+        let interval = CMTime(seconds: 0.2, preferredTimescale: 600)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self else { return }
+            if Date() < self.pauseLiveUpdatesUntil { return }
+
+            let seconds = time.seconds
+            if seconds.isFinite {
+                self.playbackProgress.currentTime = max(0, seconds)
+            }
+
+            let duration = item.duration.seconds
+            if duration.isFinite, duration > 0 {
+                self.playbackProgress.duration = duration
+            } else {
+                self.playbackProgress.duration = fallbackDuration
+            }
+
+            let total = self.playbackProgress.duration > 0 ? self.playbackProgress.duration : fallbackDuration
+            self.playbackProgress.progress = min(max(self.playbackProgress.currentTime / max(total, 0.001), 0), 1)
+        }
+
+        didPlayToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.handleSongDidFinish()
+        }
+    }
+
+    private func audioURL(for song: Song) -> URL? {
+        if let localFilePath = song.localFilePath, FileManager.default.fileExists(atPath: localFilePath) {
+            return URL(fileURLWithPath: localFilePath)
+        }
+
+        let file = song.audioFileName as NSString
+        let name = file.deletingPathExtension
+        let ext = file.pathExtension
+
+        if let localURL = documentsURL(fileName: song.audioFileName), FileManager.default.fileExists(atPath: localURL.path) {
+            return localURL
+        }
+
+        for candidateExt in ["mp3", "m4a", "wav"] {
+            let candidate = "\(name).\(candidateExt)"
+            if let url = documentsURL(fileName: candidate), FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+
+        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+            return url
+        }
+        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources/Audio") {
+            return url
+        }
+        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Audio") {
+            return url
+        }
+        return nil
+    }
+
+    private func documentsURL(fileName: String) -> URL? {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent(fileName)
+    }
+
+    private func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var result: [URL] = []
+        for case let url as URL in enumerator {
+            let ext = url.pathExtension.lowercased()
+            guard allowedExtensions.contains(ext) else { continue }
+            result.append(url)
+        }
+        return result
+    }
+
+    private func bindSettingsStore() {
+        settingsStore.$language
+            .removeDuplicates()
+            .sink { [weak self] language in
+                guard let self, self.language != language else { return }
+                self.language = language
+            }
+            .store(in: &cancellables)
+
+        settingsStore.$shuffleEnabled
+            .removeDuplicates()
+            .sink { [weak self] shuffleEnabled in
+                guard let self, self.isShuffleOn != shuffleEnabled else { return }
+                self.isShuffleOn = shuffleEnabled
+            }
+            .store(in: &cancellables)
+
+        settingsStore.$repeatMode
+            .removeDuplicates()
+            .sink { [weak self] repeatMode in
+                guard let self, self.repeatMode != repeatMode else { return }
+                self.repeatMode = repeatMode
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleSongDidFinish() {
+        if repeatMode == .one {
+            player?.seek(to: .zero)
+            player?.playImmediately(atRate: Float(playbackSpeed))
+            isPlaying = true
+            return
+        }
+
+        advanceToNext(autoTriggered: true)
+    }
+
+    private func advanceToNext(autoTriggered: Bool) {
+        guard !queueSongs.isEmpty else { return }
+
+        if isShuffleOn, queueSongs.count > 1 {
+            var randomIndex = queueIndex
+            while randomIndex == queueIndex {
+                randomIndex = Int.random(in: 0..<queueSongs.count)
+            }
+            play(song: queueSongs[randomIndex], in: queueSongs)
+            return
+        }
+
+        let nextIndex = queueIndex + 1
+        if queueSongs.indices.contains(nextIndex) {
+            play(song: queueSongs[nextIndex], in: queueSongs)
+            return
+        }
+
+        if repeatMode == .all {
+            play(song: queueSongs[0], in: queueSongs)
+            return
+        }
+
+        if repeatMode == .off || autoTriggered {
+            stopPlaybackAtEnd()
+        }
+    }
+
+    private func stopPlaybackAtEnd() {
+        player?.pause()
+        isPlaying = false
+        playbackProgress.progress = 1
+        playbackProgress.currentTime = playbackProgress.duration
+    }
+
+    private func isSameTrack(_ lhs: Song?, _ rhs: Song?) -> Bool {
+        guard let lhs, let rhs else { return false }
+
+        if let lhsPath = lhs.localFilePath, let rhsPath = rhs.localFilePath {
+            return lhsPath == rhsPath
+        }
+
+        if lhs.id == rhs.id {
+            return true
+        }
+
+        return lhs.audioFileName == rhs.audioFileName && lhs.titleEN == rhs.titleEN
+    }
+
+    private func cleanupPlayerObservers() {
+        if let token = timeObserverToken {
+            player?.removeTimeObserver(token)
+            timeObserverToken = nil
+        }
+
+        if let observer = didPlayToEndObserver {
+            NotificationCenter.default.removeObserver(observer)
+            didPlayToEndObserver = nil
+        }
+    }
+}

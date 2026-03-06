@@ -1,0 +1,47 @@
+"tab.home" = "Trang Chủ";
+"tab.playlist" = "Danh Sách";
+"tab.info" = "Thông Tin";
+
+"home.title" = "Trang Chủ";
+"home.featured" = "Nhạc Nổi Bật";
+"home.favorites" = "Yêu Thích";
+
+"playlist.title" = "Danh Sách";
+"playlist.new" = "Mới";
+"playlist.create" = "Tạo Playlist";
+"playlist.name" = "Tên Playlist";
+"playlist.cancel" = "Hủy";
+"playlist.create.button" = "Tạo";
+"playlist.add.song" = "Thêm Bài";
+"playlist.add.songs" = "Thêm Bài Hát";
+"playlist.no.songs" = "Chưa có bài hát";
+
+"common.done" = "Xong";
+"songs.count" = "%d bài hát";
+
+"info.title" = "Thông Tin";
+"info.version" = "Phiên Bản";
+"info.language" = "Ngôn Ngữ";
+"info.push.notifications" = "Thông Báo";
+"info.auto.play" = "Tự Động Phát";
+"info.account" = "Tài Khoản";
+"info.privacy" = "Quyền Riêng Tư";
+"info.help" = "Trợ Giúp";
+
+"player.now.playing" = "Đang Phát";
+"repeat.off" = "Tắt lặp";
+"repeat.all" = "Lặp danh sách";
+"repeat.one" = "Lặp 1 bài";
+"home.device.music" = "Nhạc Trong Máy";
+"home.device.music.empty" = "Không tìm thấy file nhạc trong Documents.";
+"common.refresh" = "Làm Mới";
+"device.artist" = "Từ Thiết Bị";
+"player.queue" = "Danh Sách Đang Phát";
+"player.speed" = "Tốc Độ";
+"player.sleep.timer" = "Hẹn Giờ Tắt";
+"player.sleep.off" = "Tắt Hẹn Giờ";
+"player.sleep.5m" = "5 phút";
+"player.sleep.10m" = "10 phút";
+"player.sleep.15m" = "15 phút";
+"player.sleep.30m" = "30 phút";
+"player.sleep.remaining" = "Tắt sau %@";
