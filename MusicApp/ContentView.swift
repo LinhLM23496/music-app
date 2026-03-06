@@ -47,6 +47,8 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 vm.refreshDeviceTracks()
+            } else if newPhase == .inactive || newPhase == .background {
+                vm.savePlaybackSnapshotNow()
             }
         }
         .sheet(item: $selectedSong) { song in

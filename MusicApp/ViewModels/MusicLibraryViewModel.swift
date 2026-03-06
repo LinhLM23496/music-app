@@ -63,6 +63,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
     private var pauseLiveUpdatesUntil: Date = .distantPast
+    private var lastPersistedSnapshotSecond: Int = -1
 
     init(settingsStore: AppSettingsStore = .shared) {
         self.settingsStore = settingsStore
@@ -103,6 +104,7 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     deinit {
+        persistPlaybackSnapshotForCurrentTrack()
         cleanupPlayerObservers()
         cancelSleepTimer()
     }
@@ -193,7 +195,7 @@ final class MusicLibraryViewModel: ObservableObject {
         hasPlaybackSession = true
         isMiniPlayerHidden = false
         loadAndPlay(song: queueSongs[queueIndex])
-        persistPlaybackSnapshotForCurrentTrack()
+        persistPlaybackSnapshotForCurrentTrack(position: 0)
     }
 
     private func resumeIfCurrentSong(_ song: Song) -> Bool {
@@ -233,6 +235,7 @@ final class MusicLibraryViewModel: ObservableObject {
             player.playImmediately(atRate: Float(playbackSpeed))
             isPlaying = true
         }
+        persistPlaybackSnapshotForCurrentTrack()
     }
 
     func hideMiniPlayer() {
@@ -249,6 +252,7 @@ final class MusicLibraryViewModel: ObservableObject {
         playbackProgress.currentTime = 0
         playbackProgress.progress = 0
         playbackProgress.duration = max(duration, 1)
+        persistPlaybackSnapshotForCurrentTrack(position: 0)
     }
 
     func stopPlaybackAndHideMiniPlayer() {
@@ -312,6 +316,7 @@ final class MusicLibraryViewModel: ObservableObject {
         player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
         playbackProgress.progress = clamped
         playbackProgress.currentTime = seconds
+        persistPlaybackSnapshotForCurrentTrack(position: seconds)
     }
 
     func displayDuration(for song: Song) -> Double {
@@ -519,6 +524,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private func loadAndPlay(song: Song, autoPlay: Bool = true) {
         cleanupPlayerObservers()
         configureAudioSession()
+        lastPersistedSnapshotSecond = -1
 
         guard let url = audioURL(for: song) else {
             isPlaying = false
@@ -572,6 +578,12 @@ final class MusicLibraryViewModel: ObservableObject {
 
             let total = self.playbackProgress.duration > 0 ? self.playbackProgress.duration : fallbackDuration
             self.playbackProgress.progress = min(max(self.playbackProgress.currentTime / max(total, 0.001), 0), 1)
+
+            let wholeSecond = Int(self.playbackProgress.currentTime.rounded(.down))
+            if wholeSecond >= 0, wholeSecond % 5 == 0, wholeSecond != self.lastPersistedSnapshotSecond {
+                self.lastPersistedSnapshotSecond = wholeSecond
+                self.persistPlaybackSnapshotForCurrentTrack(position: self.playbackProgress.currentTime)
+            }
         }
 
         didPlayToEndObserver = NotificationCenter.default.addObserver(
@@ -734,16 +746,20 @@ final class MusicLibraryViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func persistPlaybackSnapshotForCurrentTrack() {
+    func savePlaybackSnapshotNow() {
+        persistPlaybackSnapshotForCurrentTrack()
+    }
+
+    private func persistPlaybackSnapshotForCurrentTrack(position: Double? = nil) {
         guard let song = currentSong else { return }
+        let snapshotPosition = max(position ?? playbackProgress.currentTime, 0)
 
         settingsStore.savePlaybackSnapshot(
             PlaybackSnapshot(
                 audioFileName: song.audioFileName,
                 titleEN: song.titleEN,
                 localFilePath: song.localFilePath,
-                positionSeconds: 0,
-                wasPlaying: true
+                positionSeconds: snapshotPosition
             )
         )
     }
@@ -763,6 +779,18 @@ final class MusicLibraryViewModel: ObservableObject {
         isMiniPlayerHidden = false
 
         loadAndPlay(song: safeQueue[queueIndex], autoPlay: false)
+        let estimatedDuration = max(safeQueue[queueIndex].duration, 1)
+        let clampedPosition = min(max(snapshot.positionSeconds, 0), estimatedDuration)
+        if clampedPosition > 0 {
+            let seekTime = CMTime(seconds: clampedPosition, preferredTimescale: 600)
+            player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
+            playbackProgress.currentTime = clampedPosition
+            let total = max(estimatedDuration, 1)
+            playbackProgress.progress = min(max(clampedPosition / total, 0), 1)
+        }
+
+        player?.pause()
+        isPlaying = false
     }
 
     private func resolveSong(for snapshot: PlaybackSnapshot) -> Song? {
