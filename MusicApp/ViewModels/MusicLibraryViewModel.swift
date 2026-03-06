@@ -59,6 +59,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private var didPlayToEndObserver: NSObjectProtocol?
     private let settingsStore: AppSettingsStore
     private let sleepTimerService = SleepTimerService()
+    private let ioQueue = DispatchQueue(label: "com.musicapp.audio-io", qos: .userInitiated)
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
     private var pauseLiveUpdatesUntil: Date = .distantPast
@@ -417,64 +418,63 @@ final class MusicLibraryViewModel: ObservableObject {
             return
         }
 
-        let extensions = Set(["mp3", "m4a", "wav", "aac"])
-        let files = allAudioFiles(in: musicFolderURL, allowedExtensions: extensions)
-
-        deviceTracks = files
-            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-            .map { url in
-                let duration = AVURLAsset(url: url).duration.seconds
-                return LocalAudioTrack(
-                    id: url,
-                    url: url,
-                    fileName: url.lastPathComponent,
-                    displayName: url.deletingPathExtension().lastPathComponent,
-                    duration: duration.isFinite && duration > 0 ? duration : 180
-                )
+        ioQueue.async { [weak self] in
+            let tracks = Self.loadDeviceTracks(in: musicFolderURL)
+            DispatchQueue.main.async {
+                self?.deviceTracks = tracks
             }
+        }
     }
 
-    func importAudioFiles(from urls: [URL]) -> ImportResult {
+    func importAudioFiles(from urls: [URL], completion: @escaping (ImportResult) -> Void) {
         ensureMusicStorageFolderExists()
 
         guard let destinationFolder = musicStorageFolderURL() else {
-            return ImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count)
+            completion(ImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count))
+            return
         }
 
-        let supportedExtensions = Set(["mp3", "m4a", "wav", "aac"])
-        var imported = 0
-        var skipped = 0
-        var failed = 0
+        ioQueue.async { [weak self] in
+            let supportedExtensions = Set(["mp3", "m4a", "wav", "aac"])
+            var imported = 0
+            var skipped = 0
+            var failed = 0
 
-        for sourceURL in urls {
-            let accessed = sourceURL.startAccessingSecurityScopedResource()
-            defer {
-                if accessed {
-                    sourceURL.stopAccessingSecurityScopedResource()
+            for sourceURL in urls {
+                let accessed = sourceURL.startAccessingSecurityScopedResource()
+                defer {
+                    if accessed {
+                        sourceURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                let ext = sourceURL.pathExtension.lowercased()
+                guard supportedExtensions.contains(ext) else {
+                    skipped += 1
+                    continue
+                }
+
+                let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
+
+                do {
+                    if FileManager.default.fileExists(atPath: destinationURL.path) {
+                        try FileManager.default.removeItem(at: destinationURL)
+                    }
+                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                    imported += 1
+                } catch {
+                    failed += 1
                 }
             }
 
-            let ext = sourceURL.pathExtension.lowercased()
-            guard supportedExtensions.contains(ext) else {
-                skipped += 1
-                continue
-            }
+            let result = ImportResult(importedCount: imported, skippedCount: skipped, failedCount: failed)
+            let tracks = Self.loadDeviceTracks(in: destinationFolder)
 
-            let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
-
-            do {
-                if FileManager.default.fileExists(atPath: destinationURL.path) {
-                    try FileManager.default.removeItem(at: destinationURL)
-                }
-                try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-                imported += 1
-            } catch {
-                failed += 1
+            DispatchQueue.main.async {
+                self?.deviceTracks = tracks
+                completion(result)
             }
         }
-
-        refreshDeviceTracks()
-        return ImportResult(importedCount: imported, skippedCount: skipped, failedCount: failed)
     }
 
     func importSummaryText(_ result: ImportResult) -> String {
@@ -663,7 +663,25 @@ final class MusicLibraryViewModel: ObservableObject {
         }
     }
 
-    private func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
+    private static func loadDeviceTracks(in root: URL) -> [LocalAudioTrack] {
+        let allowedExtensions = Set(["mp3", "m4a", "wav", "aac"])
+        let files = allAudioFiles(in: root, allowedExtensions: allowedExtensions)
+
+        return files
+            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+            .map { url in
+                let duration = AVURLAsset(url: url).duration.seconds
+                return LocalAudioTrack(
+                    id: url,
+                    url: url,
+                    fileName: url.lastPathComponent,
+                    displayName: url.deletingPathExtension().lastPathComponent,
+                    duration: duration.isFinite && duration > 0 ? duration : 180
+                )
+            }
+    }
+
+    private static func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
