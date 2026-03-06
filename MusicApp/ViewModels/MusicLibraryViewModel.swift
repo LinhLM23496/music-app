@@ -98,6 +98,7 @@ final class MusicLibraryViewModel: ObservableObject {
         bindSettingsStore()
         bindSleepTimerService()
         configureAudioSession()
+        restorePlaybackSnapshotIfAvailable()
     }
 
     deinit {
@@ -191,6 +192,7 @@ final class MusicLibraryViewModel: ObservableObject {
         hasPlaybackSession = true
         isMiniPlayerHidden = false
         loadAndPlay(song: queueSongs[queueIndex])
+        persistPlaybackSnapshotForCurrentTrack()
     }
 
     private func resumeIfCurrentSong(_ song: Song) -> Bool {
@@ -263,6 +265,7 @@ final class MusicLibraryViewModel: ObservableObject {
         playbackProgress.progress = 0
         playbackProgress.currentTime = 0
         playbackProgress.duration = 1
+        settingsStore.savePlaybackSnapshot(nil)
     }
 
     func setPlaybackSpeed(_ speed: Double) {
@@ -330,6 +333,10 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func previousSong() {
+        rewindToPreviousSongOrStart()
+    }
+
+    private func rewindToPreviousSongOrStart() {
         guard !queueSongs.isEmpty else { return }
 
         if playbackProgress.currentTime > 3 {
@@ -509,7 +516,7 @@ final class MusicLibraryViewModel: ObservableObject {
         return [song]
     }
 
-    private func loadAndPlay(song: Song) {
+    private func loadAndPlay(song: Song, autoPlay: Bool = true) {
         cleanupPlayerObservers()
         configureAudioSession()
 
@@ -526,8 +533,13 @@ final class MusicLibraryViewModel: ObservableObject {
         self.player = player
 
         observePlayer(player: player, item: item, fallbackDuration: song.duration)
-        player.playImmediately(atRate: Float(playbackSpeed))
-        isPlaying = true
+        if autoPlay {
+            player.playImmediately(atRate: Float(playbackSpeed))
+            isPlaying = true
+        } else {
+            player.pause()
+            isPlaying = false
+        }
     }
 
     private func configureAudioSession() {
@@ -702,6 +714,68 @@ final class MusicLibraryViewModel: ObservableObject {
                 self?.sleepTimerRemaining = value
             }
             .store(in: &cancellables)
+    }
+
+    private func persistPlaybackSnapshotForCurrentTrack() {
+        guard let song = currentSong else { return }
+
+        settingsStore.savePlaybackSnapshot(
+            PlaybackSnapshot(
+                audioFileName: song.audioFileName,
+                titleEN: song.titleEN,
+                localFilePath: song.localFilePath,
+                positionSeconds: 0,
+                wasPlaying: true
+            )
+        )
+    }
+
+    private func restorePlaybackSnapshotIfAvailable() {
+        guard let snapshot = settingsStore.loadPlaybackSnapshot() else { return }
+        guard let restoredSong = resolveSong(for: snapshot) else { return }
+
+        let restoredQueue = suggestedQueue(for: restoredSong)
+        let safeQueue = restoredQueue.isEmpty ? [restoredSong] : restoredQueue
+
+        queueSongs = safeQueue
+        queueIndex = safeQueue.firstIndex(where: { isSameTrack($0, restoredSong) }) ?? 0
+        activeSong = safeQueue[queueIndex]
+        currentSongID = activeSong?.id
+        hasPlaybackSession = true
+        isMiniPlayerHidden = false
+
+        loadAndPlay(song: safeQueue[queueIndex], autoPlay: false)
+    }
+
+    private func resolveSong(for snapshot: PlaybackSnapshot) -> Song? {
+        if let localPath = snapshot.localFilePath {
+            if let track = deviceTracks.first(where: { $0.url.path == localPath }) {
+                return songForDeviceTrack(track)
+            }
+
+            if FileManager.default.fileExists(atPath: localPath) {
+                let localURL = URL(fileURLWithPath: localPath)
+                let duration = AVURLAsset(url: localURL).duration.seconds
+                let track = LocalAudioTrack(
+                    id: localURL,
+                    url: localURL,
+                    fileName: localURL.lastPathComponent,
+                    displayName: localURL.deletingPathExtension().lastPathComponent,
+                    duration: duration.isFinite && duration > 0 ? duration : 180
+                )
+                return songForDeviceTrack(track)
+            }
+        }
+
+        if let track = deviceTracks.first(where: { $0.fileName == snapshot.audioFileName }) {
+            return songForDeviceTrack(track)
+        }
+
+        if let song = songs.first(where: { $0.audioFileName == snapshot.audioFileName && $0.titleEN == snapshot.titleEN }) {
+            return song
+        }
+
+        return songs.first(where: { $0.audioFileName == snapshot.audioFileName })
     }
 
     private func handleSongDidFinish() {

@@ -1,6 +1,45 @@
 import Foundation
 import Combine
 
+struct PlaybackSnapshot: Codable {
+    let audioFileName: String
+    let titleEN: String
+    let localFilePath: String?
+    let positionSeconds: Double
+    let wasPlaying: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case audioFileName
+        case titleEN
+        case localFilePath
+        case positionSeconds
+        case wasPlaying
+    }
+
+    init(
+        audioFileName: String,
+        titleEN: String,
+        localFilePath: String?,
+        positionSeconds: Double,
+        wasPlaying: Bool
+    ) {
+        self.audioFileName = audioFileName
+        self.titleEN = titleEN
+        self.localFilePath = localFilePath
+        self.positionSeconds = positionSeconds
+        self.wasPlaying = wasPlaying
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        audioFileName = try container.decodeIfPresent(String.self, forKey: .audioFileName) ?? ""
+        titleEN = try container.decodeIfPresent(String.self, forKey: .titleEN) ?? ""
+        localFilePath = try container.decodeIfPresent(String.self, forKey: .localFilePath)
+        positionSeconds = try container.decodeIfPresent(Double.self, forKey: .positionSeconds) ?? 0
+        wasPlaying = try container.decodeIfPresent(Bool.self, forKey: .wasPlaying) ?? false
+    }
+}
+
 final class AppSettingsStore: ObservableObject {
     static let shared = AppSettingsStore()
 
@@ -49,6 +88,7 @@ final class AppSettingsStore: ObservableObject {
         static let shuffle = "settings.shuffle"
         static let repeatMode = "settings.repeat_mode"
         static let didRunInitialMusicScan = "settings.did_run_initial_music_scan"
+        static let playbackSnapshot = "settings.playback_snapshot"
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -77,5 +117,23 @@ final class AppSettingsStore: ObservableObject {
         }
 
         didRunInitialMusicScan = defaults.object(forKey: Keys.didRunInitialMusicScan) as? Bool ?? false
+    }
+
+    func savePlaybackSnapshot(_ snapshot: PlaybackSnapshot?) {
+        if let snapshot, let data = try? JSONEncoder().encode(snapshot) {
+            defaults.set(data, forKey: Keys.playbackSnapshot)
+        } else {
+            defaults.removeObject(forKey: Keys.playbackSnapshot)
+        }
+    }
+
+    func loadPlaybackSnapshot() -> PlaybackSnapshot? {
+        guard
+            let data = defaults.data(forKey: Keys.playbackSnapshot),
+            let snapshot = try? JSONDecoder().decode(PlaybackSnapshot.self, from: data)
+        else {
+            return nil
+        }
+        return snapshot
     }
 }

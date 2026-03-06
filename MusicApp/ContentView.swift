@@ -29,6 +29,7 @@ struct ContentView: View {
                     song: currentSong,
                     title: vm.localizedSongTitle(currentSong),
                     isPlaying: vm.isPlaying,
+                    playbackProgress: vm.playbackProgress,
                     onTogglePlayPause: { vm.togglePlayPause() },
                     onNext: { vm.nextSong() },
                     onHide: { vm.hideMiniPlayer() },
