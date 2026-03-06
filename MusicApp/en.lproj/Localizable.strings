@@ -33,7 +33,10 @@
 "repeat.all" = "Repeat All";
 "repeat.one" = "Repeat One";
 "home.device.music" = "Device Music";
-"home.device.music.empty" = "No audio files found in Documents.";
+"home.device.music.empty" = "No audio files found in Documents/MusicFiles.";
+"home.device.music.import" = "Import MP3";
+"home.device.music.import.result" = "Imported %d, skipped %d, failed %d.";
+"home.device.music.import.error" = "Import failed.";
 "common.refresh" = "Refresh";
 "device.artist" = "From Device";
 "player.queue" = "Now Playing Queue";
@@ -45,3 +48,12 @@
 "player.sleep.15m" = "15 minutes";
 "player.sleep.30m" = "30 minutes";
 "player.sleep.remaining" = "Sleep in %@";
+"info.storage" = "Music Storage";
+"info.storage.status" = "Status";
+"info.storage.check" = "Check Folder";
+"storage.status.unavailable" = "Documents folder unavailable";
+"storage.status.ready" = "Folder exists";
+"storage.status.created" = "Folder created";
+"storage.status.failed" = "Create folder failed";
+"info.storage.open.files" = "Open in Files";
+"info.storage.open.files.failed" = "Cannot open folder in Files";

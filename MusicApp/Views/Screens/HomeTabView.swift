@@ -1,8 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HomeTabView: View {
     @EnvironmentObject private var vm: MusicLibraryViewModel
     @State private var selectedSong: Song?
+    @State private var showImporter = false
+    @State private var importMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -52,6 +55,12 @@ struct HomeTabView: View {
                     HStack {
                         sectionTitle(vm.localized("home.device.music"))
                         Spacer()
+                        Button(vm.localized("home.device.music.import")) {
+                            showImporter = true
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.green)
+
                         Button(vm.localized("common.refresh")) {
                             vm.refreshDeviceTracks()
                         }
@@ -105,11 +114,35 @@ struct HomeTabView: View {
             .background(Color.black.ignoresSafeArea())
             .navigationTitle(vm.localized("home.title"))
         }
-        .task {
-            vm.refreshDeviceTracks()
-        }
         .sheet(item: $selectedSong) { song in
             MusicPlayerView(song: song, controller: vm)
+        }
+        .fileImporter(
+            isPresented: $showImporter,
+            allowedContentTypes: [.audio],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                let importResult = vm.importAudioFiles(from: urls)
+                importMessage = vm.importSummaryText(importResult)
+            case .failure:
+                importMessage = vm.localized("home.device.music.import.error")
+            }
+        }
+        .alert(vm.localized("home.device.music.import"), isPresented: Binding(
+            get: { importMessage != nil },
+            set: { isShowing in
+                if !isShowing {
+                    importMessage = nil
+                }
+            }
+        )) {
+            Button(vm.localized("common.done"), role: .cancel) {
+                importMessage = nil
+            }
+        } message: {
+            Text(importMessage ?? "")
         }
     }
 

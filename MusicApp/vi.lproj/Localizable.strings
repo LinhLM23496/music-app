@@ -33,7 +33,10 @@
 "repeat.all" = "Lặp danh sách";
 "repeat.one" = "Lặp 1 bài";
 "home.device.music" = "Nhạc Trong Máy";
-"home.device.music.empty" = "Không tìm thấy file nhạc trong Documents.";
+"home.device.music.empty" = "Không tìm thấy file nhạc trong Documents/MusicFiles.";
+"home.device.music.import" = "Nhập MP3";
+"home.device.music.import.result" = "Đã nhập %d, bỏ qua %d, lỗi %d.";
+"home.device.music.import.error" = "Nhập file thất bại.";
 "common.refresh" = "Làm Mới";
 "device.artist" = "Từ Thiết Bị";
 "player.queue" = "Danh Sách Đang Phát";
@@ -45,3 +48,12 @@
 "player.sleep.15m" = "15 phút";
 "player.sleep.30m" = "30 phút";
 "player.sleep.remaining" = "Tắt sau %@";
+"info.storage" = "Lưu Trữ Nhạc";
+"info.storage.status" = "Trạng thái";
+"info.storage.check" = "Kiểm Tra Thư Mục";
+"storage.status.unavailable" = "Không truy cập được Documents";
+"storage.status.ready" = "Thư mục đã tồn tại";
+"storage.status.created" = "Đã tạo thư mục";
+"storage.status.failed" = "Tạo thư mục thất bại";
+"info.storage.open.files" = "Mở Trong Files";
+"info.storage.open.files.failed" = "Không thể mở thư mục trong Files";

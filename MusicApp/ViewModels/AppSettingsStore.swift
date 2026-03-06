@@ -34,6 +34,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var didRunInitialMusicScan: Bool {
+        didSet {
+            defaults.set(didRunInitialMusicScan, forKey: Keys.didRunInitialMusicScan)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -42,6 +48,7 @@ final class AppSettingsStore: ObservableObject {
         static let autoPlay = "settings.auto_play"
         static let shuffle = "settings.shuffle"
         static let repeatMode = "settings.repeat_mode"
+        static let didRunInitialMusicScan = "settings.did_run_initial_music_scan"
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -68,5 +75,7 @@ final class AppSettingsStore: ObservableObject {
         } else {
             repeatMode = .all
         }
+
+        didRunInitialMusicScan = defaults.object(forKey: Keys.didRunInitialMusicScan) as? Bool ?? false
     }
 }
