@@ -110,6 +110,7 @@ struct HomeTabView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
+                .padding(.bottom, 59)
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle(vm.localized("home.title"))

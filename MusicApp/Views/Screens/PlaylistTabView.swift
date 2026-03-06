@@ -17,6 +17,7 @@ struct PlaylistTabView: View {
                 }
                 .onDelete(perform: vm.deletePlaylist)
             }
+            .safeAreaPadding(.bottom, 59)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())

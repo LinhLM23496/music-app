@@ -6,6 +6,8 @@ struct MiniPlayerBarView: View {
     let isPlaying: Bool
     let onTogglePlayPause: () -> Void
     let onNext: () -> Void
+    let onHide: () -> Void
+    let onStop: () -> Void
     let onOpen: () -> Void
 
     var body: some View {
@@ -34,6 +36,7 @@ struct MiniPlayerBarView: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.title3)
                     .frame(width: 34, height: 34)
+                    .foregroundStyle(isPlaying ? .yellow : .green)
             }
             .buttonStyle(.plain)
 
@@ -41,6 +44,21 @@ struct MiniPlayerBarView: View {
                 Image(systemName: "forward.fill")
                     .font(.title3)
                     .frame(width: 34, height: 34)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onStop) {
+                Image(systemName: "stop.fill")
+                    .font(.title3)
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onHide) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
         }

@@ -47,6 +47,7 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var queueIndex: Int
     @Published var playbackSpeed: Double = 1.0
     @Published var hasPlaybackSession = false
+    @Published var isMiniPlayerHidden = false
     @Published var sleepTimerRemaining: Double?
     @Published var musicStorageFolderPath: String = "-"
     @Published var musicStorageFolderStatus: String = "-"
@@ -92,11 +93,8 @@ final class MusicLibraryViewModel: ObservableObject {
         currentSongID = demoSongs.first?.id
 
         ensureMusicStorageFolderExists()
-
-        if !settingsStore.didRunInitialMusicScan {
-            refreshDeviceTracks()
-            settingsStore.didRunInitialMusicScan = true
-        }
+        refreshDeviceTracks()
+        settingsStore.didRunInitialMusicScan = true
         bindSettingsStore()
         bindSleepTimerService()
         configureAudioSession()
@@ -122,6 +120,10 @@ final class MusicLibraryViewModel: ObservableObject {
 
         guard let currentSongID else { return nil }
         return songs.first(where: { $0.id == currentSongID })
+    }
+
+    var shouldShowMiniPlayer: Bool {
+        hasPlaybackSession && !isMiniPlayerHidden && currentSong != nil
     }
 
     var sleepTimerText: String? {
@@ -180,6 +182,7 @@ final class MusicLibraryViewModel: ObservableObject {
         activeSong = queueSongs[queueIndex]
         currentSongID = activeSong?.id
         hasPlaybackSession = true
+        isMiniPlayerHidden = false
         loadAndPlay(song: queueSongs[queueIndex])
     }
 
@@ -203,6 +206,39 @@ final class MusicLibraryViewModel: ObservableObject {
             player.playImmediately(atRate: Float(playbackSpeed))
             isPlaying = true
         }
+    }
+
+    func hideMiniPlayer() {
+        stopPlaybackAndHideMiniPlayer()
+    }
+
+    func stopAndResetPlayback() {
+        cancelSleepTimer()
+        player?.pause()
+        isPlaying = false
+
+        let duration = playbackProgress.duration > 0 ? playbackProgress.duration : (currentSong?.duration ?? 1)
+        player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
+        playbackProgress.currentTime = 0
+        playbackProgress.progress = 0
+        playbackProgress.duration = max(duration, 1)
+    }
+
+    func stopPlaybackAndHideMiniPlayer() {
+        player?.pause()
+        isPlaying = false
+        cancelSleepTimer()
+        cleanupPlayerObservers()
+        player = nil
+        activeSong = nil
+        currentSongID = nil
+        hasPlaybackSession = false
+        isMiniPlayerHidden = false
+        queueSongs = []
+        queueIndex = 0
+        playbackProgress.progress = 0
+        playbackProgress.currentTime = 0
+        playbackProgress.duration = 1
     }
 
     func setPlaybackSpeed(_ speed: Double) {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore = AppSettingsStore.shared
     @StateObject private var vm = MusicLibraryViewModel()
     @State private var selectedSong: Song?
@@ -23,13 +24,15 @@ struct ContentView: View {
                 }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if vm.hasPlaybackSession, let currentSong = vm.currentSong {
+            if vm.shouldShowMiniPlayer, let currentSong = vm.currentSong {
                 MiniPlayerBarView(
                     song: currentSong,
                     title: vm.localizedSongTitle(currentSong),
                     isPlaying: vm.isPlaying,
                     onTogglePlayPause: { vm.togglePlayPause() },
                     onNext: { vm.nextSong() },
+                    onHide: { vm.hideMiniPlayer() },
+                    onStop: { vm.stopAndResetPlayback() },
                     onOpen: { selectedSong = currentSong }
                 )
                 .padding(.horizontal, 12)
@@ -40,6 +43,11 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .environmentObject(vm)
         .environmentObject(settingsStore)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                vm.refreshDeviceTracks()
+            }
+        }
         .sheet(item: $selectedSong) { song in
             MusicPlayerView(song: song, controller: vm)
         }

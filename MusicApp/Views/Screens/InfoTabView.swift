@@ -98,6 +98,7 @@ struct InfoTabView: View {
                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
                 .padding(16)
+                .padding(.bottom, 59)
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle(vm.localized("info.title"))
