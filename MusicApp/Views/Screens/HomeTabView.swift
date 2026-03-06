@@ -125,8 +125,9 @@ struct HomeTabView: View {
         ) { result in
             switch result {
             case .success(let urls):
-                let importResult = vm.importAudioFiles(from: urls)
-                importMessage = vm.importSummaryText(importResult)
+                vm.importAudioFiles(from: urls) { importResult in
+                    importMessage = vm.importSummaryText(importResult)
+                }
             case .failure:
                 importMessage = vm.localized("home.device.music.import.error")
             }
