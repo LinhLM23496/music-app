@@ -4,7 +4,6 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore = AppSettingsStore.shared
     @StateObject private var vm = MusicLibraryViewModel()
-    @State private var selectedSong: Song?
 
     var body: some View {
         TabView {
@@ -34,7 +33,7 @@ struct ContentView: View {
                     onNext: { vm.nextSong() },
                     onHide: { vm.hideMiniPlayer() },
                     onStop: { vm.stopAndResetPlayback() },
-                    onOpen: { selectedSong = currentSong }
+                    onOpen: { vm.presentPlayer(for: currentSong) }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -51,7 +50,7 @@ struct ContentView: View {
                 vm.savePlaybackSnapshotNow()
             }
         }
-        .sheet(item: $selectedSong) { song in
+        .sheet(item: $vm.playerSheetSong) { song in
             MusicPlayerView(song: song, controller: vm)
         }
     }

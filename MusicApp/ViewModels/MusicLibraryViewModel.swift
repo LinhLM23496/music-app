@@ -48,6 +48,7 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var playbackSpeed: Double = 1.0
     @Published var hasPlaybackSession = false
     @Published var isMiniPlayerHidden = false
+    @Published var playerSheetSong: Song?
     @Published var sleepTimerRemaining: Double?
     @Published var musicStorageFolderPath: String = "-"
     @Published var musicStorageFolderStatus: String = "-"
@@ -253,6 +254,10 @@ final class MusicLibraryViewModel: ObservableObject {
         playbackProgress.progress = 0
         playbackProgress.duration = max(duration, 1)
         persistPlaybackSnapshotForCurrentTrack(position: 0)
+    }
+
+    func presentPlayer(for song: Song) {
+        playerSheetSong = song
     }
 
     func stopPlaybackAndHideMiniPlayer() {
