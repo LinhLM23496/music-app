@@ -164,11 +164,18 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func play(song: Song) {
+        if resumeIfCurrentSong(song) {
+            return
+        }
         let autoQueue = suggestedQueue(for: song)
         play(song: song, in: autoQueue)
     }
 
     func play(song: Song, in queue: [Song]) {
+        if resumeIfCurrentSong(song) {
+            return
+        }
+
         let safeQueue = queue.isEmpty ? [song] : queue
         queueSongs = safeQueue
 
@@ -184,6 +191,23 @@ final class MusicLibraryViewModel: ObservableObject {
         hasPlaybackSession = true
         isMiniPlayerHidden = false
         loadAndPlay(song: queueSongs[queueIndex])
+    }
+
+    private func resumeIfCurrentSong(_ song: Song) -> Bool {
+        guard isSameTrack(currentSong, song) else { return false }
+
+        if isPlaying {
+            return true
+        }
+
+        if let player {
+            player.playImmediately(atRate: Float(playbackSpeed))
+            isPlaying = true
+            return true
+        }
+
+        loadAndPlay(song: song)
+        return true
     }
 
     func playFromQueue(index: Int) {
