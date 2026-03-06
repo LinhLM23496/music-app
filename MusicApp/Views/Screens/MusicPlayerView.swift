@@ -46,7 +46,7 @@ struct MusicPlayerView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 8)
+                .padding(.top, 16)
 
                 PlayerArtworkView(song: uiState.displaySong, isPlaying: uiState.isPlaying)
 
@@ -103,10 +103,6 @@ struct MusicPlayerView: View {
                     }
                 }
                 .buttonStyle(.plain)
-
-                Text(localized(uiState.repeatMode.localizationKey))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 HStack(spacing: 12) {
                     Menu {
@@ -173,7 +169,9 @@ struct MusicPlayerView: View {
         }
         .onAppear {
             uiState.bind(to: controller)
-            controller.play(song: song)
+            if !controller.isCurrentSong(song) {
+                controller.play(song: song)
+            }
         }
         .sheet(isPresented: $showQueueSheet) {
             queueSheet

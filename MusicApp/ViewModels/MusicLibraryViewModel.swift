@@ -46,6 +46,7 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var queueSongs: [Song]
     @Published var queueIndex: Int
     @Published var playbackSpeed: Double = 1.0
+    @Published var hasPlaybackSession = false
     @Published var sleepTimerRemaining: Double?
     @Published var musicStorageFolderPath: String = "-"
     @Published var musicStorageFolderStatus: String = "-"
@@ -56,11 +57,9 @@ final class MusicLibraryViewModel: ObservableObject {
     private var timeObserverToken: Any?
     private var didPlayToEndObserver: NSObjectProtocol?
     private let settingsStore: AppSettingsStore
+    private let sleepTimerService = SleepTimerService()
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
-    private var sleepTimerWorkItem: DispatchWorkItem?
-    private var sleepTimerEndDate: Date?
-    private var sleepTimerTicker: AnyCancellable?
     private var pauseLiveUpdatesUntil: Date = .distantPast
 
     init(settingsStore: AppSettingsStore = .shared) {
@@ -99,6 +98,7 @@ final class MusicLibraryViewModel: ObservableObject {
             settingsStore.didRunInitialMusicScan = true
         }
         bindSettingsStore()
+        bindSleepTimerService()
         configureAudioSession()
     }
 
@@ -157,6 +157,10 @@ final class MusicLibraryViewModel: ObservableObject {
         songs.first(where: { $0.id == id })
     }
 
+    func isCurrentSong(_ song: Song) -> Bool {
+        isSameTrack(currentSong, song)
+    }
+
     func play(song: Song) {
         let autoQueue = suggestedQueue(for: song)
         play(song: song, in: autoQueue)
@@ -175,6 +179,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
         activeSong = queueSongs[queueIndex]
         currentSongID = activeSong?.id
+        hasPlaybackSession = true
         loadAndPlay(song: queueSongs[queueIndex])
     }
 
@@ -208,41 +213,20 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func setSleepTimer(minutes: Double?) {
-        cancelSleepTimer()
-
         guard let minutes, minutes > 0 else {
+            cancelSleepTimer()
             return
         }
 
-        let duration = minutes * 60
-        sleepTimerRemaining = duration
-        sleepTimerEndDate = Date().addingTimeInterval(duration)
-
-        let workItem = DispatchWorkItem { [weak self] in
+        sleepTimerService.start(minutes: minutes) { [weak self] in
             guard let self else { return }
             self.player?.pause()
             self.isPlaying = false
-            self.cancelSleepTimer()
         }
-        sleepTimerWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: workItem)
-
-        sleepTimerTicker = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self, let endDate = self.sleepTimerEndDate else { return }
-                let remaining = max(0, endDate.timeIntervalSinceNow)
-                self.sleepTimerRemaining = remaining
-            }
     }
 
     func cancelSleepTimer() {
-        sleepTimerWorkItem?.cancel()
-        sleepTimerWorkItem = nil
-        sleepTimerEndDate = nil
-        sleepTimerRemaining = nil
-        sleepTimerTicker?.cancel()
-        sleepTimerTicker = nil
+        sleepTimerService.cancel()
     }
 
     func pauseLiveProgressUpdates(seconds: Double) {
@@ -647,6 +631,15 @@ final class MusicLibraryViewModel: ObservableObject {
             .sink { [weak self] repeatMode in
                 guard let self, self.repeatMode != repeatMode else { return }
                 self.repeatMode = repeatMode
+            }
+            .store(in: &cancellables)
+    }
+
+    private func bindSleepTimerService() {
+        sleepTimerService.$remaining
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                self?.sleepTimerRemaining = value
             }
             .store(in: &cancellables)
     }
