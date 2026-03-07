@@ -66,6 +66,11 @@ protocol FavoritesRepository {
     func saveFavoriteIDs(_ ids: Set<UUID>)
 }
 
+protocol PlaylistRepository {
+    func loadPlaylists() -> [Playlist]
+    func savePlaylists(_ playlists: [Playlist])
+}
+
 final class UserDefaultsAuthRepository: AuthRepository {
     private let defaults: UserDefaults
     private let key = "auth.current_user_name"
@@ -172,6 +177,57 @@ final class UserDefaultsFavoritesRepository: FavoritesRepository {
 
     func saveFavoriteIDs(_ ids: Set<UUID>) {
         defaults.set(ids.map(\.uuidString), forKey: key)
+    }
+}
+
+final class UserDefaultsPlaylistRepository: PlaylistRepository {
+    private struct PlaylistSnapshot: Codable {
+        let id: UUID
+        let nameEN: String
+        let nameVI: String
+        let coverSymbol: String
+        let songIDs: [UUID]
+    }
+
+    private let defaults: UserDefaults
+    private let key = "playlist.saved_items"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func loadPlaylists() -> [Playlist] {
+        guard
+            let data = defaults.data(forKey: key),
+            let snapshots = try? JSONDecoder().decode([PlaylistSnapshot].self, from: data)
+        else {
+            return []
+        }
+
+        return snapshots.map {
+            Playlist(
+                id: $0.id,
+                nameEN: $0.nameEN,
+                nameVI: $0.nameVI,
+                coverSymbol: $0.coverSymbol,
+                songIDs: $0.songIDs
+            )
+        }
+    }
+
+    func savePlaylists(_ playlists: [Playlist]) {
+        let snapshots = playlists.map {
+            PlaylistSnapshot(
+                id: $0.id,
+                nameEN: $0.nameEN,
+                nameVI: $0.nameVI,
+                coverSymbol: $0.coverSymbol,
+                songIDs: $0.songIDs
+            )
+        }
+
+        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+        defaults.set(data, forKey: key)
     }
 }
 

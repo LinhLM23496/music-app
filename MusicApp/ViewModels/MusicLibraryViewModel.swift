@@ -309,22 +309,27 @@ final class ImportViewModel: ObservableObject {
 final class PlaylistViewModel: ObservableObject {
     @Published var playlists: [Playlist]
 
+    private let playlistRepository: PlaylistRepository
     private let playlistUseCases = PlaylistUseCases()
 
-    init(catalogProvider: MusicCatalogProviding) {
-        playlists = catalogProvider.loadInitialCatalog().playlists
+    init(playlistRepository: PlaylistRepository) {
+        self.playlistRepository = playlistRepository
+        playlists = playlistRepository.loadPlaylists()
     }
 
     func createPlaylist(name: String) {
         playlists = playlistUseCases.createPlaylist(name: name, in: playlists)
+        playlistRepository.savePlaylists(playlists)
     }
 
     func deletePlaylist(at offsets: IndexSet) {
         playlists = playlistUseCases.deletePlaylists(at: offsets, in: playlists)
+        playlistRepository.savePlaylists(playlists)
     }
 
     func addSong(_ song: Song, to playlistID: UUID) {
         playlists = playlistUseCases.addSong(song, to: playlistID, in: playlists)
+        playlistRepository.savePlaylists(playlists)
     }
 
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {

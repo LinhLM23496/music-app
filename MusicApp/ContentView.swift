@@ -15,7 +15,7 @@ struct ContentView: View {
         let settings = AppSettingsStore.shared
         let libraryViewModel = container.makeLibraryViewModel()
         let importViewModel = ImportViewModel(settingsStore: settings)
-        let playlistViewModel = PlaylistViewModel(catalogProvider: container.catalogProvider)
+        let playlistViewModel = container.makePlaylistViewModel()
         let playerDataSource = PlayerLibraryDataSource(
             libraryViewModel: libraryViewModel,
             importViewModel: importViewModel,

@@ -53,6 +53,7 @@ final class AppContainer {
     let authRepository: AuthRepository
     let trackRepository: TrackRepository
     let favoritesRepository: FavoritesRepository
+    let playlistRepository: PlaylistRepository
 
     private init() {
         catalogProvider = MockMusicCatalogProvider()
@@ -63,6 +64,7 @@ final class AppContainer {
             fallbackProvider: catalogProvider
         )
         favoritesRepository = UserDefaultsFavoritesRepository()
+        playlistRepository = UserDefaultsPlaylistRepository()
     }
 
     func makeAuthViewModel() -> AuthViewModel {
@@ -74,6 +76,10 @@ final class AppContainer {
             trackRepository: trackRepository,
             favoritesRepository: favoritesRepository
         )
+    }
+
+    func makePlaylistViewModel() -> PlaylistViewModel {
+        PlaylistViewModel(playlistRepository: playlistRepository)
     }
 
     func makePlayerViewModel(libraryDataSource: LibraryPlaybackDataProviding) -> PlayerViewModel {
