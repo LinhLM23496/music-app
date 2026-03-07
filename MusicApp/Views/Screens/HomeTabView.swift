@@ -9,8 +9,10 @@ struct HomeTabView: View {
     @State private var showImporter = false
     @State private var importMessage: String?
 
-    private var favoriteSongsFromLibrary: [Song] {
-        libraryViewModel.tracks.filter { libraryViewModel.favoriteIDs.contains($0.id) }
+    private var favoriteSongs: [Song] {
+        let libraryFavorites = libraryViewModel.tracks.filter { libraryViewModel.favoriteIDs.contains($0.id) }
+        let importedFavorites = importViewModel.importedSongs.filter { libraryViewModel.favoriteIDs.contains($0.id) }
+        return libraryFavorites + importedFavorites
     }
 
     var body: some View {
@@ -46,14 +48,14 @@ struct HomeTabView: View {
 
                     sectionTitle(localizationViewModel.t("home.favorites"))
 
-                    if favoriteSongsFromLibrary.isEmpty {
+                    if favoriteSongs.isEmpty {
                         Text(localizationViewModel.t("home.favorites.empty.cta"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
                         VStack(spacing: 10) {
-                            ForEach(favoriteSongsFromLibrary) { song in
+                            ForEach(favoriteSongs) { song in
                                 Button {
                                     playerViewModel.play(song: song)
                                     playerViewModel.presentPlayer(for: song)
