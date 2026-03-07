@@ -11,9 +11,6 @@ struct ImportResult {
 @MainActor
 final class MusicLibraryViewModel: ObservableObject, LibraryPlaybackDataProviding {
     @Published private(set) var songs: [Song]
-    @Published var user: AppUser {
-        didSet { userInfoStore.user = user }
-    }
 
     var language: AppLanguage {
         get { settingsStore.language }
@@ -34,7 +31,6 @@ final class MusicLibraryViewModel: ObservableObject, LibraryPlaybackDataProvidin
     private let settingsStore: AppSettingsStore
     private weak var catalogSource: LibraryCatalogDataProviding?
     private weak var importViewModel: ImportViewModel?
-    private let userInfoStore = UserInfoStore()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -48,7 +44,6 @@ final class MusicLibraryViewModel: ObservableObject, LibraryPlaybackDataProvidin
         self.importViewModel = importViewModel
 
         songs = catalogSource.tracks
-        user = userInfoStore.user
 
         bindCatalogSource()
         bindSettingsStore()

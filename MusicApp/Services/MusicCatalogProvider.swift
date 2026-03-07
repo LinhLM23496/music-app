@@ -14,6 +14,32 @@ protocol MusicCatalogProviding {
 struct AuthUser {
     let id: String
     let displayName: String
+    let avatarSymbol: String
+    let appVersion: String
+
+    static func guest() -> AuthUser {
+        AuthUser(
+            id: "guest",
+            displayName: "Guest",
+            avatarSymbol: "person.crop.circle.badge.xmark",
+            appVersion: currentAppVersion()
+        )
+    }
+
+    static func demo(name: String) -> AuthUser {
+        AuthUser(
+            id: "local-demo-user",
+            displayName: name,
+            avatarSymbol: "person.crop.circle.badge.checkmark",
+            appVersion: currentAppVersion()
+        )
+    }
+
+    private static func currentAppVersion() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        guard let version, !version.isEmpty else { return "1.0.0" }
+        return version
+    }
 }
 
 protocol AuthRepository {
@@ -50,11 +76,11 @@ final class UserDefaultsAuthRepository: AuthRepository {
 
     func loadCurrentUser() -> AuthUser? {
         guard let name = defaults.string(forKey: key), !name.isEmpty else { return nil }
-        return AuthUser(id: "local-demo-user", displayName: name)
+        return AuthUser.demo(name: name)
     }
 
     func signInDemo() -> AuthUser {
-        let user = AuthUser(id: "local-demo-user", displayName: "LinhLe")
+        let user = AuthUser.demo(name: "LinhLe")
         defaults.set(user.displayName, forKey: key)
         return user
     }

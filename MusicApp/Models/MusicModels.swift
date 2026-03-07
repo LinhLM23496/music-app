@@ -54,12 +54,6 @@ struct LocalAudioTrack: Identifiable, Hashable {
     let duration: Double
 }
 
-struct AppUser {
-    let username: String
-    let avatarSymbol: String
-    let appVersion: String
-}
-
 enum RepeatMode: String, CaseIterable {
     case off
     case all

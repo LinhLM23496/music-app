@@ -10,7 +10,7 @@ struct InfoTabView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     VStack(spacing: 10) {
-                        Image(systemName: authViewModel.isLoggedIn ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
+                        Image(systemName: authViewModel.activeUser.avatarSymbol)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 88, height: 88)
@@ -18,7 +18,7 @@ struct InfoTabView: View {
 
                         Text(authViewModel.currentUser?.displayName ?? vm.localized("auth.guest"))
                             .font(.title2.bold())
-                        Text("\(vm.localized("info.version")): \(vm.user.appVersion)")
+                        Text("\(vm.localized("info.version")): \(authViewModel.activeUser.appVersion)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
