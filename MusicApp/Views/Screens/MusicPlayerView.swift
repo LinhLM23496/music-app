@@ -2,16 +2,16 @@ import SwiftUI
 
 struct MusicPlayerView: View {
     let song: Song
-    @ObservedObject var vm: PlayerViewModel
+    let controller: MusicLibraryViewModel
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var uiState: MusicPlayerUIState
     @State private var showQueueSheet = false
 
-    init(song: Song, vm: PlayerViewModel) {
+    init(song: Song, controller: MusicLibraryViewModel) {
         self.song = song
-        self.vm = vm
-        _uiState = StateObject(wrappedValue: MusicPlayerUIState(song: song, source: vm.source))
+        self.controller = controller
+        _uiState = StateObject(wrappedValue: MusicPlayerUIState(song: song, source: controller))
     }
 
     private func localized(_ key: String) -> String {
@@ -54,34 +54,34 @@ struct MusicPlayerView: View {
                     song: uiState.displaySong,
                     language: uiState.language,
                     isFavorite: uiState.favoriteSongIDs.contains(uiState.displaySong.id),
-                    onToggleFavorite: { vm.source.toggleFavorite(for: uiState.displaySong) }
+                    onToggleFavorite: { controller.toggleFavorite(for: uiState.displaySong) }
                 )
                 .padding(.horizontal, 24)
 
                 PlaybackProgressSection(
                     state: uiState.playbackProgress,
                     fallbackDuration: uiState.playbackProgress.duration > 0 ? uiState.playbackProgress.duration : uiState.displaySong.duration,
-                    onSeek: { vm.source.seek(to: $0) }
+                    onSeek: { controller.seek(to: $0) }
                 )
                 .padding(.horizontal, 24)
 
                 HStack(spacing: 26) {
                     Button {
-                        vm.source.isShuffleOn.toggle()
+                        controller.isShuffleOn.toggle()
                     } label: {
                         Image(systemName: "shuffle")
                             .foregroundStyle(uiState.isShuffleOn ? .green : .white)
                     }
 
                     Button {
-                        vm.source.previousSong()
+                        controller.previousSong()
                     } label: {
                         Image(systemName: "backward.fill")
                             .font(.title)
                     }
 
                     Button {
-                        vm.togglePlayPause()
+                        controller.togglePlayPause()
                     } label: {
                         Image(systemName: uiState.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                             .font(.system(size: 72))
@@ -89,14 +89,14 @@ struct MusicPlayerView: View {
                     }
 
                     Button {
-                        vm.nextSong()
+                        controller.nextSong()
                     } label: {
                         Image(systemName: "forward.fill")
                             .font(.title)
                     }
 
                     Button {
-                        vm.source.cycleRepeatMode()
+                        controller.cycleRepeatMode()
                     } label: {
                         Image(systemName: uiState.repeatMode.icon)
                             .foregroundStyle(uiState.repeatMode == .off ? .white : .green)
@@ -108,8 +108,8 @@ struct MusicPlayerView: View {
                     Menu {
                         ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
                             Button {
-                                vm.source.setPlaybackSpeed(speed)
-                                vm.source.resumeLiveProgressUpdates()
+                                controller.setPlaybackSpeed(speed)
+                                controller.resumeLiveProgressUpdates()
                             } label: {
                                 if speed == uiState.playbackSpeed {
                                     Label(String(format: "%.2fx", speed), systemImage: "checkmark")
@@ -122,7 +122,7 @@ struct MusicPlayerView: View {
                         Label("\(localized("player.speed")): \(String(format: "%.2fx", uiState.playbackSpeed))", systemImage: "speedometer")
                     }
                     .simultaneousGesture(TapGesture().onEnded {
-                        vm.source.pauseLiveProgressUpdates(seconds: 2.0)
+                        controller.pauseLiveProgressUpdates(seconds: 2.0)
                     })
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -130,30 +130,30 @@ struct MusicPlayerView: View {
 
                     Menu {
                         Button(localized("player.sleep.off")) {
-                            vm.source.cancelSleepTimer()
-                            vm.source.resumeLiveProgressUpdates()
+                            controller.cancelSleepTimer()
+                            controller.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.5m")) {
-                            vm.source.setSleepTimer(minutes: 5)
-                            vm.source.resumeLiveProgressUpdates()
+                            controller.setSleepTimer(minutes: 5)
+                            controller.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.10m")) {
-                            vm.source.setSleepTimer(minutes: 10)
-                            vm.source.resumeLiveProgressUpdates()
+                            controller.setSleepTimer(minutes: 10)
+                            controller.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.15m")) {
-                            vm.source.setSleepTimer(minutes: 15)
-                            vm.source.resumeLiveProgressUpdates()
+                            controller.setSleepTimer(minutes: 15)
+                            controller.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.30m")) {
-                            vm.source.setSleepTimer(minutes: 30)
-                            vm.source.resumeLiveProgressUpdates()
+                            controller.setSleepTimer(minutes: 30)
+                            controller.resumeLiveProgressUpdates()
                         }
                     } label: {
                         Label(localized("player.sleep.timer"), systemImage: "timer")
                     }
                     .simultaneousGesture(TapGesture().onEnded {
-                        vm.source.pauseLiveProgressUpdates(seconds: 2.0)
+                        controller.pauseLiveProgressUpdates(seconds: 2.0)
                     })
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -169,9 +169,9 @@ struct MusicPlayerView: View {
         }
         .onAppear {
             DispatchQueue.main.async {
-                uiState.bind(to: vm.source)
-                if !vm.source.isCurrentSong(song) {
-                    vm.source.play(song: song)
+                uiState.bind(to: controller)
+                if !controller.isCurrentSong(song) {
+                    controller.play(song: song)
                 }
             }
         }
@@ -185,7 +185,7 @@ struct MusicPlayerView: View {
         NavigationStack {
             List(Array(uiState.queueSongs.enumerated()), id: \.offset) { index, queueSong in
                 Button {
-                    vm.source.playFromQueue(index: index)
+                    controller.playFromQueue(index: index)
                 } label: {
                     HStack(spacing: 12) {
                         AlbumArtworkView(symbol: queueSong.coverSymbol, accent: queueSong.accent, cornerRadius: 10)

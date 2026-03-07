@@ -2,7 +2,8 @@ import SwiftUI
 
 struct InfoTabView: View {
     @Environment(\.openURL) private var openURL
-    @ObservedObject var vm: InfoViewModel
+    @EnvironmentObject private var vm: MusicLibraryViewModel
+    @EnvironmentObject private var settingsStore: AppSettingsStore
     @State private var showOpenFilesError = false
 
     var body: some View {
@@ -30,7 +31,7 @@ struct InfoTabView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(vm.localized("info.language"))
                                 .font(.subheadline.weight(.semibold))
-                            Picker(vm.localized("info.language"), selection: languageBinding) {
+                            Picker(vm.localized("info.language"), selection: $settingsStore.language) {
                                 ForEach(AppLanguage.allCases) { language in
                                     Text(language.displayName).tag(language)
                                 }
@@ -38,8 +39,8 @@ struct InfoTabView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        Toggle(vm.localized("info.push.notifications"), isOn: pushNotificationsBinding)
-                        Toggle(vm.localized("info.auto.play"), isOn: autoPlayBinding)
+                        Toggle(vm.localized("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
+                        Toggle(vm.localized("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
 
                         Button {
                         } label: {
@@ -130,26 +131,5 @@ struct InfoTabView: View {
                 showOpenFilesError = true
             }
         }
-    }
-
-    private var languageBinding: Binding<AppLanguage> {
-        Binding(
-            get: { vm.settingsStore.language },
-            set: { vm.settingsStore.language = $0 }
-        )
-    }
-
-    private var pushNotificationsBinding: Binding<Bool> {
-        Binding(
-            get: { vm.settingsStore.pushNotificationsEnabled },
-            set: { vm.settingsStore.pushNotificationsEnabled = $0 }
-        )
-    }
-
-    private var autoPlayBinding: Binding<Bool> {
-        Binding(
-            get: { vm.settingsStore.autoPlayEnabled },
-            set: { vm.settingsStore.autoPlayEnabled = $0 }
-        )
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlaylistTabView: View {
-    @ObservedObject var vm: PlaylistViewModel
+    @EnvironmentObject private var vm: MusicLibraryViewModel
 
     @State private var showingCreatePlaylist = false
     @State private var newPlaylistName = ""
@@ -43,7 +43,8 @@ struct PlaylistTabView: View {
             }
         }
         .sheet(item: $selectedPlaylistForAdd) { playlist in
-            AddSongToPlaylistView(playlist: playlist, vm: vm)
+            AddSongToPlaylistView(playlist: playlist)
+                .environmentObject(vm)
         }
     }
 
@@ -89,7 +90,7 @@ struct PlaylistTabView: View {
 
 struct AddSongToPlaylistView: View {
     let playlist: Playlist
-    @ObservedObject var vm: PlaylistViewModel
+    @EnvironmentObject private var vm: MusicLibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {

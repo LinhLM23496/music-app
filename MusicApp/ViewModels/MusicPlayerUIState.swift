@@ -18,7 +18,7 @@ final class MusicPlayerUIState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isBound = false
 
-    init(song: Song, source: any PlayerFeatureControlling) {
+    init(song: Song, source: MusicLibraryViewModel) {
         displaySong = source.currentSong ?? song
         language = source.language
         isPlaying = source.isPlaying
@@ -32,7 +32,7 @@ final class MusicPlayerUIState: ObservableObject {
         playbackProgress = source.playbackProgress
     }
 
-    func bind(to source: any PlayerFeatureControlling) {
+    func bind(to source: MusicLibraryViewModel) {
         guard !isBound else { return }
         isBound = true
 
@@ -40,23 +40,45 @@ final class MusicPlayerUIState: ObservableObject {
             .removeDuplicates()
             .assign(to: &$language)
 
-        source.changePublisher
-            .sink { [weak self] _ in
-                guard let self else { return }
-                self.isPlaying = source.isPlaying
-                self.isShuffleOn = source.isShuffleOn
-                self.repeatMode = source.repeatMode
-                self.playbackSpeed = source.playbackSpeed
-                self.queueSongs = source.queueSongs
-                self.queueIndex = source.queueIndex
-                self.sleepTimerText = source.sleepTimerText
-                self.syncDisplaySongFromQueue()
+        source.$isPlaying
+            .removeDuplicates()
+            .assign(to: &$isPlaying)
+
+        source.$isShuffleOn
+            .removeDuplicates()
+            .assign(to: &$isShuffleOn)
+
+        source.$repeatMode
+            .removeDuplicates()
+            .assign(to: &$repeatMode)
+
+        source.$playbackSpeed
+            .removeDuplicates()
+            .assign(to: &$playbackSpeed)
+
+        source.$queueSongs
+            .sink { [weak self] queue in
+                self?.queueSongs = queue
+                self?.syncDisplaySongFromQueue()
+            }
+            .store(in: &cancellables)
+
+        source.$queueIndex
+            .removeDuplicates()
+            .sink { [weak self] index in
+                self?.queueIndex = index
+                self?.syncDisplaySongFromQueue()
             }
             .store(in: &cancellables)
 
         source.favoriteSongIDsPublisher
             .removeDuplicates()
             .assign(to: &$favoriteSongIDs)
+
+        source.$sleepTimerRemaining
+            .map { _ in source.sleepTimerText }
+            .removeDuplicates()
+            .assign(to: &$sleepTimerText)
     }
 
     private func syncDisplaySongFromQueue() {
