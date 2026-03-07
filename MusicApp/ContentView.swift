@@ -2,38 +2,53 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var settingsStore = AppSettingsStore.shared
-    @StateObject private var vm = MusicLibraryViewModel(settingsStore: .shared)
+    @StateObject private var settingsStore: AppSettingsStore
+    @StateObject private var appVM: MusicLibraryViewModel
+    @StateObject private var homeVM: HomeViewModel
+    @StateObject private var playlistVM: PlaylistViewModel
+    @StateObject private var infoVM: InfoViewModel
+    @StateObject private var playerVM: PlayerViewModel
+
+    init() {
+        let settings = AppSettingsStore.shared
+        let app = MusicLibraryViewModel(settingsStore: .shared)
+        _settingsStore = StateObject(wrappedValue: settings)
+        _appVM = StateObject(wrappedValue: app)
+        _homeVM = StateObject(wrappedValue: HomeViewModel(appVM: app))
+        _playlistVM = StateObject(wrappedValue: PlaylistViewModel(appVM: app))
+        _infoVM = StateObject(wrappedValue: InfoViewModel(appVM: app, settingsStore: settings))
+        _playerVM = StateObject(wrappedValue: PlayerViewModel(appVM: app))
+    }
 
     var body: some View {
         TabView {
-            HomeTabView()
+            HomeTabView(vm: homeVM)
                 .tabItem {
-                    Label(vm.localized("tab.home"), systemImage: "house.fill")
+                    Label(playerVM.localized("tab.home"), systemImage: "house.fill")
                 }
 
-            PlaylistTabView()
+            PlaylistTabView(vm: playlistVM)
                 .tabItem {
-                    Label(vm.localized("tab.playlist"), systemImage: "music.note.list")
+                    Label(playerVM.localized("tab.playlist"), systemImage: "music.note.list")
                 }
 
-            InfoTabView()
+            InfoTabView(vm: infoVM)
                 .tabItem {
-                    Label(vm.localized("tab.info"), systemImage: "person.crop.circle")
+                    Label(playerVM.localized("tab.info"), systemImage: "person.crop.circle")
                 }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if vm.shouldShowMiniPlayer, let currentSong = vm.currentSong {
+            if playerVM.shouldShowMiniPlayer, let currentSong = playerVM.currentSong {
                 MiniPlayerBarView(
                     song: currentSong,
-                    title: vm.localizedSongTitle(currentSong),
-                    isPlaying: vm.isPlaying,
-                    playbackProgress: vm.playbackProgress,
-                    onTogglePlayPause: { vm.togglePlayPause() },
-                    onNext: { vm.nextSong() },
-                    onHide: { vm.hideMiniPlayer() },
-                    onStop: { vm.stopAndResetPlayback() },
-                    onOpen: { vm.presentPlayer(for: currentSong) }
+                    title: playerVM.localizedSongTitle(currentSong),
+                    isPlaying: playerVM.isPlaying,
+                    playbackProgress: playerVM.playbackProgress,
+                    onTogglePlayPause: { playerVM.togglePlayPause() },
+                    onNext: { playerVM.nextSong() },
+                    onHide: { playerVM.hideMiniPlayer() },
+                    onStop: { playerVM.stopAndResetPlayback() },
+                    onOpen: { playerVM.presentPlayer(for: currentSong) }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -41,28 +56,26 @@ struct ContentView: View {
         }
         .tint(.green)
         .preferredColorScheme(.dark)
-        .environmentObject(vm)
-        .environmentObject(settingsStore)
         .task {
             if scenePhase == .active {
                 DispatchQueue.main.async {
-                    vm.handleSceneDidBecomeActive()
+                    appVM.handleSceneDidBecomeActive()
                 }
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 DispatchQueue.main.async {
-                    vm.handleSceneDidBecomeActive()
+                    appVM.handleSceneDidBecomeActive()
                 }
             } else if newPhase == .inactive || newPhase == .background {
                 DispatchQueue.main.async {
-                    vm.savePlaybackSnapshotNow()
+                    appVM.savePlaybackSnapshotNow()
                 }
             }
         }
-        .sheet(item: $vm.playerSheetSong) { song in
-            MusicPlayerView(song: song, controller: vm)
+        .sheet(item: $playerVM.playerSheetSong) { song in
+            MusicPlayerView(song: song, vm: playerVM)
         }
     }
 }

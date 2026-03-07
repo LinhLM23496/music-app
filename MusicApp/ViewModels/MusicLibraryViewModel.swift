@@ -11,10 +11,6 @@ final class MusicLibraryViewModel: ObservableObject {
         let failedCount: Int
     }
 
-    private enum Storage {
-        static let musicFolderName = "MusicFiles"
-    }
-
     @Published var songs: [Song] {
         didSet { libraryStore.songs = songs }
     }
@@ -97,6 +93,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private let libraryStore: LibraryStore
     private let playlistStore: PlaylistStore
     private let deviceMediaStore = DeviceMediaStore()
+    private let deviceMediaService = DeviceMediaService()
     private let playerUIStore = PlayerUIStore()
     private let userInfoStore = UserInfoStore()
 
@@ -105,14 +102,26 @@ final class MusicLibraryViewModel: ObservableObject {
     private let snapshotStore: PlaybackSnapshotStore
     private let libraryUseCases = LibraryUseCases()
     private let playlistUseCases = PlaylistUseCases()
+    private lazy var playerCoordinator: PlayerCoordinator = {
+        PlayerCoordinator(
+            queueStore: queueStore,
+            playbackController: playbackController,
+            snapshotStore: snapshotStore,
+            isSameTrack: isSameTrack,
+            suggestedQueue: { [weak self] song in
+                self?.suggestedQueue(for: song) ?? [song]
+            },
+            audioURLForSong: { [weak self] song in
+                self?.deviceMediaService.audioURL(for: song)
+            }
+        )
+    }()
 
     private let sleepTimerService = SleepTimerService()
     private let ioQueue = DispatchQueue(label: "com.musicapp.audio-io", qos: .userInitiated)
 
     private var cancellables = Set<AnyCancellable>()
-    private var activeSong: Song?
     private var didPerformInitialActivationWork = false
-    private var lastPersistedSnapshotSecond: Int = -1
 
     init(
         settingsStore: AppSettingsStore,
@@ -153,8 +162,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
         queueSongs = queueStore.queueSongs
         queueIndex = queueStore.queueIndex
-        activeSong = queueStore.currentSong
-        currentSongID = activeSong?.id
+        currentSongID = queueStore.currentSong?.id
 
         isMiniPlayerHidden = playerUIStore.isMiniPlayerHidden
         playerSheetSong = playerUIStore.playerSheetSong
@@ -187,10 +195,9 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     var currentSong: Song? {
-        if let activeSong {
-            return activeSong
+        if let song = playerCoordinator.currentSong {
+            return song
         }
-
         guard let currentSongID else { return nil }
         return songs.first(where: { $0.id == currentSongID })
     }
@@ -237,62 +244,23 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func play(song: Song) {
-        if resumeIfCurrentSong(song) {
-            return
-        }
-        let autoQueue = suggestedQueue(for: song)
-        play(song: song, in: autoQueue)
+        playerCoordinator.play(song: song, playbackSpeed: playbackSpeed)
+        syncPlayerStateFromCoordinator()
     }
 
     func play(song: Song, in queue: [Song]) {
-        if resumeIfCurrentSong(song) {
-            return
-        }
-
-        let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
-        activeSong = selectedSong
-        currentSongID = selectedSong.id
-        hasPlaybackSession = true
-        isMiniPlayerHidden = false
-        loadAndPlay(song: selectedSong)
-        persistPlaybackSnapshotForCurrentTrack(position: 0)
-    }
-
-    private func resumeIfCurrentSong(_ song: Song) -> Bool {
-        guard isSameTrack(currentSong, song) else { return false }
-
-        if isPlaying {
-            return true
-        }
-
-        if playbackController.hasLoadedItem {
-            playbackController.resume(rate: playbackSpeed)
-            return true
-        }
-
-        loadAndPlay(song: song)
-        return true
+        playerCoordinator.play(song: song, in: queue, playbackSpeed: playbackSpeed)
+        syncPlayerStateFromCoordinator()
     }
 
     func playFromQueue(index: Int) {
-        guard let song = queueStore.song(at: index) else { return }
-        play(song: song, in: queueStore.queueSongs)
+        playerCoordinator.playFromQueue(index: index, playbackSpeed: playbackSpeed)
+        syncPlayerStateFromCoordinator()
     }
 
     func togglePlayPause() {
-        if !playbackController.hasLoadedItem {
-            if let song = currentSong {
-                loadAndPlay(song: song)
-            }
-            return
-        }
-
-        if isPlaying {
-            playbackController.pause()
-        } else {
-            playbackController.resume(rate: playbackSpeed)
-        }
-        persistPlaybackSnapshotForCurrentTrack()
+        playerCoordinator.togglePlayPause(playbackSpeed: playbackSpeed)
+        syncPlayerStateFromCoordinator()
     }
 
     func hideMiniPlayer() {
@@ -301,8 +269,8 @@ final class MusicLibraryViewModel: ObservableObject {
 
     func stopAndResetPlayback() {
         cancelSleepTimer()
-        playbackController.stopAndReset(fallbackDuration: currentSong?.duration ?? 1)
-        persistPlaybackSnapshotForCurrentTrack(position: 0)
+        playerCoordinator.stopAndResetPlayback(fallbackDuration: currentSong?.duration ?? 1)
+        syncPlayerStateFromCoordinator()
     }
 
     func presentPlayer(for song: Song) {
@@ -311,18 +279,13 @@ final class MusicLibraryViewModel: ObservableObject {
 
     func stopPlaybackAndHideMiniPlayer() {
         cancelSleepTimer()
-        playbackController.stopAndClear()
-        activeSong = nil
-        currentSongID = nil
-        hasPlaybackSession = false
-        isMiniPlayerHidden = false
-        queueStore.reset()
-        snapshotStore.clear()
+        playerCoordinator.stopPlaybackAndHideMiniPlayer()
+        syncPlayerStateFromCoordinator()
     }
 
     func setPlaybackSpeed(_ speed: Double) {
         playbackSpeed = speed
-        playbackController.setRateIfPlaying(speed)
+        playerCoordinator.updatePlaybackSpeed(speed)
     }
 
     func setSleepTimer(minutes: Double?) {
@@ -350,11 +313,11 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func seek(to normalizedProgress: Double) {
-        let duration = playbackProgress.duration > 0 ? playbackProgress.duration : (currentSong?.duration ?? 1)
-        let clamped = min(max(normalizedProgress, 0), 1)
-        let seconds = duration * clamped
-        playbackController.seek(to: seconds)
-        persistPlaybackSnapshotForCurrentTrack(position: seconds)
+        playerCoordinator.seek(
+            to: normalizedProgress,
+            fallbackDuration: currentSong?.duration ?? 1
+        )
+        syncPlayerStateFromCoordinator()
     }
 
     func displayDuration(for song: Song) -> Double {
@@ -372,18 +335,13 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func nextSong() {
-        advanceToNext(autoTriggered: false)
+        playerCoordinator.nextSong(playbackSpeed: playbackSpeed, autoTriggered: false)
+        syncPlayerStateFromCoordinator()
     }
 
     func previousSong() {
-        switch queueStore.previousAction(currentTime: playbackProgress.currentTime) {
-        case .seekToStart:
-            seek(to: 0)
-        case .play(let song):
-            play(song: song, in: queueStore.queueSongs)
-        case .none:
-            break
-        }
+        playerCoordinator.previousSong(playbackSpeed: playbackSpeed)
+        syncPlayerStateFromCoordinator()
     }
 
     func cycleRepeatMode() {
@@ -414,15 +372,18 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func refreshDeviceTracks() {
-        ensureMusicStorageFolderExists()
+        let ensureResult = deviceMediaService.ensureStorageFolderExists(localized: localized)
+        musicStorageFolderPath = ensureResult.path
+        musicStorageFolderStatus = ensureResult.status
 
-        guard let musicFolderURL = musicStorageFolderURL() else {
+        guard let musicFolderURL = ensureResult.folderURL else {
             deviceTracks = []
             return
         }
 
         ioQueue.async { [weak self] in
-            let tracks = Self.loadDeviceTracks(in: musicFolderURL)
+            guard let self else { return }
+            let tracks = self.deviceMediaService.loadDeviceTracks(in: musicFolderURL)
             Task { @MainActor [weak self] in
                 self?.deviceTracks = tracks
             }
@@ -430,48 +391,29 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func importAudioFiles(from urls: [URL], completion: @escaping (ImportResult) -> Void) {
-        ensureMusicStorageFolderExists()
+        let ensureResult = deviceMediaService.ensureStorageFolderExists(localized: localized)
+        musicStorageFolderPath = ensureResult.path
+        musicStorageFolderStatus = ensureResult.status
 
-        guard let destinationFolder = musicStorageFolderURL() else {
+        guard let destinationFolder = ensureResult.folderURL else {
             completion(ImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count))
             return
         }
 
         ioQueue.async { [weak self] in
-            let supportedExtensions = Set(["mp3", "m4a", "wav", "aac"])
-            var imported = 0
-            var skipped = 0
-            var failed = 0
+            guard let self else { return }
 
-            for sourceURL in urls {
-                let accessed = sourceURL.startAccessingSecurityScopedResource()
-                defer {
-                    if accessed {
-                        sourceURL.stopAccessingSecurityScopedResource()
-                    }
-                }
+            let counts = self.deviceMediaService.importAudioFiles(
+                from: urls,
+                destinationFolder: destinationFolder
+            )
 
-                let ext = sourceURL.pathExtension.lowercased()
-                guard supportedExtensions.contains(ext) else {
-                    skipped += 1
-                    continue
-                }
-
-                let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
-
-                do {
-                    if FileManager.default.fileExists(atPath: destinationURL.path) {
-                        try FileManager.default.removeItem(at: destinationURL)
-                    }
-                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-                    imported += 1
-                } catch {
-                    failed += 1
-                }
-            }
-
-            let result = ImportResult(importedCount: imported, skippedCount: skipped, failedCount: failed)
-            let tracks = Self.loadDeviceTracks(in: destinationFolder)
+            let result = ImportResult(
+                importedCount: counts.imported,
+                skippedCount: counts.skipped,
+                failedCount: counts.failed
+            )
+            let tracks = self.deviceMediaService.loadDeviceTracks(in: destinationFolder)
 
             Task { @MainActor [weak self] in
                 self?.deviceTracks = tracks
@@ -513,125 +455,14 @@ final class MusicLibraryViewModel: ObservableObject {
         )
     }
 
-    private func loadAndPlay(song: Song, autoPlay: Bool = true) {
-        lastPersistedSnapshotSecond = -1
-        let url = audioURL(for: song)
-        playbackController.load(song: song, audioURL: url, autoPlay: autoPlay, playbackRate: playbackSpeed)
-    }
-
-    private func audioURL(for song: Song) -> URL? {
-        if let localFilePath = song.localFilePath, FileManager.default.fileExists(atPath: localFilePath) {
-            return URL(fileURLWithPath: localFilePath)
-        }
-
-        let file = song.audioFileName as NSString
-        let name = file.deletingPathExtension
-        let ext = file.pathExtension
-
-        if let localURL = musicFileURL(fileName: song.audioFileName), FileManager.default.fileExists(atPath: localURL.path) {
-            return localURL
-        }
-
-        for candidateExt in ["mp3", "m4a", "wav"] {
-            let candidate = "\(name).\(candidateExt)"
-            if let url = musicFileURL(fileName: candidate), FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-
-        if let url = Bundle.main.url(forResource: name, withExtension: ext) {
-            return url
-        }
-        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Resources/Audio") {
-            return url
-        }
-        if let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "Audio") {
-            return url
-        }
-        return nil
-    }
-
-    private func musicStorageFolderURL() -> URL? {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent(Storage.musicFolderName, isDirectory: true)
-    }
-
     func musicStorageURL() -> URL? {
-        musicStorageFolderURL()
-    }
-
-    private func musicFileURL(fileName: String) -> URL? {
-        musicStorageFolderURL()?
-            .appendingPathComponent(fileName)
+        deviceMediaService.storageFolderURL()
     }
 
     private func ensureMusicStorageFolderExists() {
-        guard let folderURL = musicStorageFolderURL() else {
-            musicStorageFolderPath = "-"
-            musicStorageFolderStatus = localized("storage.status.unavailable")
-            return
-        }
-
-        musicStorageFolderPath = folderURL.path
-
-        var isDirectory: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory)
-
-        if exists, isDirectory.boolValue {
-            musicStorageFolderStatus = localized("storage.status.ready")
-            return
-        }
-
-        do {
-            if exists && !isDirectory.boolValue {
-                try FileManager.default.removeItem(at: folderURL)
-            }
-
-            try FileManager.default.createDirectory(
-                at: folderURL,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-            musicStorageFolderStatus = localized("storage.status.created")
-        } catch {
-            musicStorageFolderStatus = "\(localized("storage.status.failed")): \(error.localizedDescription)"
-        }
-    }
-
-    nonisolated private static func loadDeviceTracks(in root: URL) -> [LocalAudioTrack] {
-        let allowedExtensions = Set(["mp3", "m4a", "wav", "aac"])
-        let files = allAudioFiles(in: root, allowedExtensions: allowedExtensions)
-
-        return files
-            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-            .map { url in
-                LocalAudioTrack(
-                    id: url,
-                    url: url,
-                    fileName: url.lastPathComponent,
-                    displayName: url.deletingPathExtension().lastPathComponent,
-                    duration: 180
-                )
-            }
-    }
-
-    nonisolated private static func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        var result: [URL] = []
-        for case let url as URL in enumerator {
-            let ext = url.pathExtension.lowercased()
-            guard allowedExtensions.contains(ext) else { continue }
-            result.append(url)
-        }
-        return result
+        let result = deviceMediaService.ensureStorageFolderExists(localized: localized)
+        musicStorageFolderPath = result.path
+        musicStorageFolderStatus = result.status
     }
 
     private func stableSongID(forLocalPath path: String) -> UUID {
@@ -689,7 +520,11 @@ final class MusicLibraryViewModel: ObservableObject {
 
         playbackController.onDidFinish = { [weak self] in
             guard let self else { return }
-            self.handleSongDidFinish()
+            self.playerCoordinator.handleSongDidFinish(
+                repeatMode: self.repeatMode,
+                playbackSpeed: self.playbackSpeed
+            )
+            self.syncPlayerStateFromCoordinator()
         }
     }
 
@@ -707,46 +542,24 @@ final class MusicLibraryViewModel: ObservableObject {
             .sink { [weak self] time in
                 guard let self else { return }
                 let wholeSecond = Int(time.rounded(.down))
-                if wholeSecond >= 0,
-                   wholeSecond % 5 == 0,
-                   wholeSecond != self.lastPersistedSnapshotSecond,
-                   self.hasPlaybackSession {
-                    self.lastPersistedSnapshotSecond = wholeSecond
-                    self.persistPlaybackSnapshotForCurrentTrack(position: time)
-                }
+                self.playerCoordinator.handleProgressTickForSnapshotPersistence(
+                    wholeSecond: wholeSecond,
+                    currentTime: time
+                )
             }
             .store(in: &cancellables)
     }
 
     func savePlaybackSnapshotNow() {
-        persistPlaybackSnapshotForCurrentTrack()
-    }
-
-    private func persistPlaybackSnapshotForCurrentTrack(position: Double? = nil) {
-        let snapshotPosition = max(position ?? playbackProgress.currentTime, 0)
-        snapshotStore.save(song: currentSong, position: snapshotPosition)
+        playerCoordinator.saveSnapshotNow()
     }
 
     private func restorePlaybackSnapshotIfAvailable() {
-        guard let snapshot = snapshotStore.load() else { return }
-        guard let restoredSong = resolveSong(for: snapshot) else { return }
-
-        let restoredQueue = suggestedQueue(for: restoredSong)
-        let selectedSong = queueStore.setQueue(current: restoredSong, in: restoredQueue, isSameTrack: isSameTrack)
-
-        activeSong = selectedSong
-        currentSongID = selectedSong.id
-        hasPlaybackSession = true
-        isMiniPlayerHidden = false
-
-        loadAndPlay(song: selectedSong, autoPlay: false)
-
-        let estimatedDuration = max(selectedSong.duration, 1)
-        let clampedPosition = min(max(snapshot.positionSeconds, 0), estimatedDuration)
-        if clampedPosition > 0 {
-            playbackController.seek(to: clampedPosition)
-        }
-        playbackController.pause()
+        playerCoordinator.restorePlaybackSnapshotIfAvailable(
+            resolveSong: resolveSong(for:),
+            playbackSpeed: playbackSpeed
+        )
+        syncPlayerStateFromCoordinator()
     }
 
     private func resolveSong(for snapshot: PlaybackSnapshot) -> Song? {
@@ -780,27 +593,9 @@ final class MusicLibraryViewModel: ObservableObject {
         return songs.first(where: { $0.audioFileName == snapshot.audioFileName })
     }
 
-    private func handleSongDidFinish() {
-        if repeatMode == .one {
-            playbackController.seek(to: 0)
-            playbackController.resume(rate: playbackSpeed)
-            return
-        }
-
-        advanceToNext(autoTriggered: true)
-    }
-
-    private func advanceToNext(autoTriggered: Bool) {
-        switch queueStore.nextAction(autoTriggered: autoTriggered) {
-        case .play(let song):
-            play(song: song, in: queueStore.queueSongs)
-        case .stopAtEnd:
-            stopPlaybackAtEnd()
-        }
-    }
-
-    private func stopPlaybackAtEnd() {
-        playbackController.stopAtEnd()
+    private func syncPlayerStateFromCoordinator() {
+        currentSongID = playerCoordinator.currentSongID
+        hasPlaybackSession = playerCoordinator.hasPlaybackSession
     }
 
     private func isSameTrack(_ lhs: Song?, _ rhs: Song?) -> Bool {

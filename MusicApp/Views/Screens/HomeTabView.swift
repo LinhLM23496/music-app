@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct HomeTabView: View {
-    @EnvironmentObject private var vm: MusicLibraryViewModel
+    @ObservedObject var vm: HomeViewModel
     @State private var showImporter = false
     @State private var importMessage: String?
 
