@@ -15,6 +15,7 @@
 "playlist.create.button" = "Create";
 "playlist.add.song" = "Add Song";
 "playlist.add.songs" = "Add Songs";
+"playlist.add.song.success" = "Added to playlist.";
 "playlist.no.songs" = "No songs yet";
 
 "common.done" = "Done";

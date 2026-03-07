@@ -15,6 +15,7 @@
 "playlist.create.button" = "Tạo";
 "playlist.add.song" = "Thêm Bài";
 "playlist.add.songs" = "Thêm Bài Hát";
+"playlist.add.song.success" = "Đã thêm vào playlist.";
 "playlist.no.songs" = "Chưa có bài hát";
 
 "common.done" = "Xong";
