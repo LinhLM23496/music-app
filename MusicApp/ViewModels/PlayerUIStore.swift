@@ -7,7 +7,7 @@ final class PlayerUIStore: ObservableObject {
     @Published var playerSheetSong: Song?
 }
 
-protocol LibraryPlaybackDataProviding: AnyObject {
+protocol LibraryPlaybackDataProviding {
     var songs: [Song] { get }
     var importedSongs: [Song] { get }
     var language: AppLanguage { get }
@@ -53,7 +53,7 @@ final class PlayerViewModel: ObservableObject {
     let playbackProgress: PlaybackProgressState
 
     private let settingsStore: AppSettingsStore
-    private weak var libraryDataSource: LibraryPlaybackDataProviding?
+    private let libraryDataSource: LibraryPlaybackDataProviding
     private let queueStore: QueueStore
     private let playbackController: PlaybackController
     private let snapshotStore: PlaybackSnapshotStore
@@ -105,7 +105,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     var languagePublisher: AnyPublisher<AppLanguage, Never> {
-        libraryDataSource?.languagePublisher ?? Just(language).eraseToAnyPublisher()
+        libraryDataSource.languagePublisher
     }
 
     var currentSong: Song? {
@@ -123,7 +123,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     func localized(_ key: String) -> String {
-        libraryDataSource?.localized(key) ?? key
+        libraryDataSource.localized(key)
     }
 
     func localizedSongTitle(_ song: Song) -> String {
@@ -261,15 +261,15 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private var librarySongs: [Song] {
-        libraryDataSource?.songs ?? []
+        libraryDataSource.songs
     }
 
     private var importedSongs: [Song] {
-        libraryDataSource?.importedSongs ?? []
+        libraryDataSource.importedSongs
     }
 
     var language: AppLanguage {
-        libraryDataSource?.language ?? .english
+        libraryDataSource.language
     }
 
     private func play(song: Song, in queue: [Song]) {

@@ -6,6 +6,44 @@
 //
 
 import SwiftUI
+import Combine
+
+@MainActor
+final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
+    private let libraryViewModel: LibraryViewModel
+    private let importViewModel: ImportViewModel
+    private let settingsStore: AppSettingsStore
+
+    init(
+        libraryViewModel: LibraryViewModel,
+        importViewModel: ImportViewModel,
+        settingsStore: AppSettingsStore
+    ) {
+        self.libraryViewModel = libraryViewModel
+        self.importViewModel = importViewModel
+        self.settingsStore = settingsStore
+    }
+
+    var songs: [Song] {
+        libraryViewModel.tracks
+    }
+
+    var importedSongs: [Song] {
+        importViewModel.importedSongs
+    }
+
+    var language: AppLanguage {
+        settingsStore.language
+    }
+
+    var languagePublisher: AnyPublisher<AppLanguage, Never> {
+        settingsStore.$language.eraseToAnyPublisher()
+    }
+
+    func localized(_ key: String) -> String {
+        Localizer.string(key, language: settingsStore.language)
+    }
+}
 
 @MainActor
 final class AppContainer {

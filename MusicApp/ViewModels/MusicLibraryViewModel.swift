@@ -9,7 +9,7 @@ struct ImportResult {
 }
 
 @MainActor
-final class MusicLibraryViewModel: ObservableObject, LibraryPlaybackDataProviding {
+final class MusicLibraryViewModel: ObservableObject {
     @Published private(set) var songs: [Song]
 
     var language: AppLanguage {

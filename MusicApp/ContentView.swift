@@ -16,6 +16,11 @@ struct ContentView: View {
         let libraryViewModel = container.makeLibraryViewModel()
         let importViewModel = ImportViewModel(settingsStore: settings)
         let playlistViewModel = PlaylistViewModel(catalogProvider: container.catalogProvider)
+        let playerDataSource = PlayerLibraryDataSource(
+            libraryViewModel: libraryViewModel,
+            importViewModel: importViewModel,
+            settingsStore: settings
+        )
         let libraryVM = MusicLibraryViewModel(
             settingsStore: settings,
             catalogSource: libraryViewModel,
@@ -28,7 +33,7 @@ struct ContentView: View {
         _playlistViewModel = StateObject(wrappedValue: playlistViewModel)
         _authViewModel = StateObject(wrappedValue: container.makeAuthViewModel())
         _libraryViewModel = StateObject(wrappedValue: libraryViewModel)
-        _playerViewModel = StateObject(wrappedValue: container.makePlayerViewModel(libraryDataSource: libraryVM))
+        _playerViewModel = StateObject(wrappedValue: container.makePlayerViewModel(libraryDataSource: playerDataSource))
     }
 
     var body: some View {
