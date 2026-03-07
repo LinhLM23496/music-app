@@ -9,3 +9,28 @@ final class UserInfoStore: ObservableObject {
         self.user = user
     }
 }
+
+@MainActor
+final class AuthViewModel: ObservableObject {
+    @Published private(set) var currentUser: AuthUser?
+
+    private let authRepository: AuthRepository
+
+    init(authRepository: AuthRepository) {
+        self.authRepository = authRepository
+        currentUser = authRepository.loadCurrentUser()
+    }
+
+    var isLoggedIn: Bool {
+        currentUser != nil
+    }
+
+    func signInDemo() {
+        currentUser = authRepository.signInDemo()
+    }
+
+    func signOut() {
+        authRepository.signOut()
+        currentUser = nil
+    }
+}

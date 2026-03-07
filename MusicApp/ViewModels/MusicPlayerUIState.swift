@@ -10,7 +10,6 @@ final class MusicPlayerUIState: ObservableObject {
     @Published var playbackSpeed: Double
     @Published var queueSongs: [Song]
     @Published var queueIndex: Int
-    @Published var favoriteSongIDs: Set<UUID>
     @Published var sleepTimerText: String?
 
     let playbackProgress: PlaybackProgressState
@@ -18,7 +17,7 @@ final class MusicPlayerUIState: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isBound = false
 
-    init(song: Song, source: MusicLibraryViewModel) {
+    init(song: Song, source: PlayerViewModel) {
         displaySong = source.currentSong ?? song
         language = source.language
         isPlaying = source.isPlaying
@@ -27,12 +26,11 @@ final class MusicPlayerUIState: ObservableObject {
         playbackSpeed = source.playbackSpeed
         queueSongs = source.queueSongs
         queueIndex = source.queueIndex
-        favoriteSongIDs = source.favoriteSongIDs
         sleepTimerText = source.sleepTimerText
         playbackProgress = source.playbackProgress
     }
 
-    func bind(to source: MusicLibraryViewModel) {
+    func bind(to source: PlayerViewModel) {
         guard !isBound else { return }
         isBound = true
 
@@ -71,12 +69,7 @@ final class MusicPlayerUIState: ObservableObject {
             }
             .store(in: &cancellables)
 
-        source.favoriteSongIDsPublisher
-            .removeDuplicates()
-            .assign(to: &$favoriteSongIDs)
-
-        source.$sleepTimerRemaining
-            .map { _ in source.sleepTimerText }
+        source.$sleepTimerText
             .removeDuplicates()
             .assign(to: &$sleepTimerText)
     }

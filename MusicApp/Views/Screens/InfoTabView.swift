@@ -3,19 +3,20 @@ import SwiftUI
 struct InfoTabView: View {
     @EnvironmentObject private var vm: MusicLibraryViewModel
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var authViewModel: AuthViewModel
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     VStack(spacing: 10) {
-                        Image(systemName: vm.user.avatarSymbol)
+                        Image(systemName: authViewModel.isLoggedIn ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 88, height: 88)
                             .foregroundStyle(.green)
 
-                        Text(vm.user.username)
+                        Text(authViewModel.currentUser?.displayName ?? vm.localized("auth.guest"))
                             .font(.title2.bold())
                         Text("\(vm.localized("info.version")): \(vm.user.appVersion)")
                             .font(.subheadline)
@@ -39,6 +40,19 @@ struct InfoTabView: View {
 
                         Toggle(vm.localized("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
                         Toggle(vm.localized("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
+
+                        Button {
+                            if authViewModel.isLoggedIn {
+                                authViewModel.signOut()
+                            } else {
+                                authViewModel.signInDemo()
+                            }
+                        } label: {
+                            settingsRow(
+                                authViewModel.isLoggedIn ? vm.localized("auth.signout") : vm.localized("auth.signin.demo"),
+                                icon: authViewModel.isLoggedIn ? "rectangle.portrait.and.arrow.right" : "person.crop.circle.badge.plus"
+                            )
+                        }
 
                         Button {
                         } label: {

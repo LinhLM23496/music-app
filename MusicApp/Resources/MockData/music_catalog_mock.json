@@ -1,0 +1,144 @@
+{
+  "songs": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "titleEN": "Feeling Trance",
+      "titleVI": "Feeling Trance",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "music.note.tv",
+      "audioFileName": "FEELING TRANCE' 🍭 Psytrance Mix 2020_gWDbLBgcoi4.mp3",
+      "duration": 240,
+      "accent": "pink"
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "titleEN": "Mot Dem Say",
+      "titleVI": "Mot Dem Say",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "moon.stars.fill",
+      "audioFileName": "MỘT ĐÊM SAY (X) - Official Music Video.mp3",
+      "duration": 240,
+      "accent": "blue"
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "titleEN": "Ngan Trang Tron",
+      "titleVI": "Ngan Trang Tron",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "moon.fill",
+      "audioFileName": "NGẮN  TRĂNG TRÒN  Official MV.mp3",
+      "duration": 240,
+      "accent": "mint"
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "titleEN": "Nhe Nhang Cuc Chill",
+      "titleVI": "Nhe Nhang Cuc Chill",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "sparkles",
+      "audioFileName": "Nhẹ Nhàng Cực Chill.mp3",
+      "duration": 240,
+      "accent": "orange"
+    },
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "titleEN": "Tu Do",
+      "titleVI": "Tu Do",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "music.mic",
+      "audioFileName": "TỪ ĐÓ - PHAN MẠNH QUỲNH - MẮT BIẾC OST.mp3",
+      "duration": 240,
+      "accent": "purple"
+    },
+    {
+      "id": "66666666-6666-6666-6666-666666666666",
+      "titleEN": "Thang Be Cam Quyen 2",
+      "titleVI": "Thang Be Cam Quyen 2",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "bolt.fill",
+      "audioFileName": "Thằng Bé Cầm Quyền 2 - XAVI Phạm (320 kbps).mp3",
+      "duration": 240,
+      "accent": "cyan"
+    },
+    {
+      "id": "77777777-7777-7777-7777-777777777777",
+      "titleEN": "Tinh Ka",
+      "titleVI": "Tinh Ka",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "heart.fill",
+      "audioFileName": "Tình Ka  Danhka.mp3",
+      "duration": 240,
+      "accent": "green"
+    },
+    {
+      "id": "88888888-8888-8888-8888-888888888888",
+      "titleEN": "Thang Be Cam Quyen Remix",
+      "titleVI": "Thang Be Cam Quyen Remix",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "waveform",
+      "audioFileName": "Tổng hợp THẰNG BÉ CẦM QUYỀN ft DOLLAR MÁU  - XAVI Phạm hay nhất 2022.mp3",
+      "duration": 240,
+      "accent": "red"
+    },
+    {
+      "id": "99999999-9999-9999-9999-999999999999",
+      "titleEN": "Duong Den Vinh Quang",
+      "titleVI": "Duong Den Vinh Quang",
+      "artist": "Mock Artist",
+      "album": "Mock Audio",
+      "coverSymbol": "music.quarternote.3",
+      "audioFileName": "Đường đến vinh quang.mp3",
+      "duration": 240,
+      "accent": "yellow"
+    }
+  ],
+  "featuredSongIDs": [
+    "11111111-1111-1111-1111-111111111111",
+    "22222222-2222-2222-2222-222222222222",
+    "33333333-3333-3333-3333-333333333333",
+    "44444444-4444-4444-4444-444444444444"
+  ],
+  "playlists": [
+    {
+      "id": "aaaaaaa1-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+      "nameEN": "Top Picks",
+      "nameVI": "Top Picks",
+      "coverSymbol": "star.fill",
+      "songIDs": [
+        "11111111-1111-1111-1111-111111111111",
+        "44444444-4444-4444-4444-444444444444",
+        "99999999-9999-9999-9999-999999999999"
+      ]
+    },
+    {
+      "id": "aaaaaaa2-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
+      "nameEN": "Vietnam Mix",
+      "nameVI": "Vietnam Mix",
+      "coverSymbol": "music.note.list",
+      "songIDs": [
+        "22222222-2222-2222-2222-222222222222",
+        "55555555-5555-5555-5555-555555555555",
+        "77777777-7777-7777-7777-777777777777"
+      ]
+    },
+    {
+      "id": "aaaaaaa3-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
+      "nameEN": "Energy",
+      "nameVI": "Energy",
+      "coverSymbol": "bolt.fill",
+      "songIDs": [
+        "33333333-3333-3333-3333-333333333333",
+        "66666666-6666-6666-6666-666666666666",
+        "88888888-8888-8888-8888-888888888888"
+      ]
+    }
+  ]
+}
