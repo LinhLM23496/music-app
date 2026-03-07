@@ -36,7 +36,7 @@ final class MusicPlayerUIState: ObservableObject {
         guard !isBound else { return }
         isBound = true
 
-        source.$language
+        source.languagePublisher
             .removeDuplicates()
             .assign(to: &$language)
 
@@ -71,7 +71,7 @@ final class MusicPlayerUIState: ObservableObject {
             }
             .store(in: &cancellables)
 
-        source.$favoriteSongIDs
+        source.favoriteSongIDsPublisher
             .removeDuplicates()
             .assign(to: &$favoriteSongIDs)
 

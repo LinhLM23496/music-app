@@ -15,17 +15,39 @@ final class MusicLibraryViewModel: ObservableObject {
         static let musicFolderName = "MusicFiles"
     }
 
-    @Published var songs: [Song]
-    @Published var deviceTracks: [LocalAudioTrack] = []
-    @Published var featuredSongIDs: [UUID]
-    @Published var favoriteSongIDs: Set<UUID>
-    @Published var playlists: [Playlist]
-    @Published var language: AppLanguage {
-        didSet {
-            if settingsStore.language != language {
-                settingsStore.language = language
+    var songs: [Song] {
+        get { libraryStore.songs }
+        set { libraryStore.songs = newValue }
+    }
+    var deviceTracks: [LocalAudioTrack] {
+        get { deviceMediaStore.deviceTracks }
+        set { deviceMediaStore.deviceTracks = newValue }
+    }
+    var featuredSongIDs: [UUID] {
+        get { libraryStore.featuredSongIDs }
+        set { libraryStore.featuredSongIDs = newValue }
+    }
+    var favoriteSongIDs: Set<UUID> {
+        get { libraryStore.favoriteSongIDs }
+        set { libraryStore.favoriteSongIDs = newValue }
+    }
+    var playlists: [Playlist] {
+        get { playlistStore.playlists }
+        set { playlistStore.playlists = newValue }
+    }
+    var language: AppLanguage {
+        get { settingsStore.language }
+        set {
+            if settingsStore.language != newValue {
+                settingsStore.language = newValue
             }
         }
+    }
+    var languagePublisher: AnyPublisher<AppLanguage, Never> {
+        settingsStore.$language.eraseToAnyPublisher()
+    }
+    var favoriteSongIDsPublisher: AnyPublisher<Set<UUID>, Never> {
+        libraryStore.$favoriteSongIDs.eraseToAnyPublisher()
     }
 
     @Published var currentSongID: UUID?
@@ -49,18 +71,35 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var queueIndex: Int
     @Published var playbackSpeed: Double = 1.0
     @Published var hasPlaybackSession = false
-    @Published var isMiniPlayerHidden = false
-    @Published var playerSheetSong: Song?
+    var isMiniPlayerHidden: Bool {
+        get { playerUIStore.isMiniPlayerHidden }
+        set { playerUIStore.isMiniPlayerHidden = newValue }
+    }
+    var playerSheetSong: Song? {
+        get { playerUIStore.playerSheetSong }
+        set { playerUIStore.playerSheetSong = newValue }
+    }
     @Published var sleepTimerRemaining: Double?
-    @Published var musicStorageFolderPath: String = "-"
-    @Published var musicStorageFolderStatus: String = "-"
+    var musicStorageFolderPath: String {
+        get { deviceMediaStore.musicStorageFolderPath }
+        set { deviceMediaStore.musicStorageFolderPath = newValue }
+    }
+    var musicStorageFolderStatus: String {
+        get { deviceMediaStore.musicStorageFolderStatus }
+        set { deviceMediaStore.musicStorageFolderStatus = newValue }
+    }
 
-    let user = AppUser(username: "LinhLe", avatarSymbol: "person.crop.circle.fill", appVersion: "1.0.0")
+    var user: AppUser { userInfoStore.user }
 
     private var player: AVPlayer?
     private var timeObserverToken: Any?
     private var didPlayToEndObserver: NSObjectProtocol?
     private let settingsStore: AppSettingsStore
+    private let libraryStore: LibraryStore
+    private let playlistStore: PlaylistStore
+    private let deviceMediaStore = DeviceMediaStore()
+    private let playerUIStore = PlayerUIStore()
+    private let userInfoStore = UserInfoStore()
     private let sleepTimerService = SleepTimerService()
     private let ioQueue = DispatchQueue(label: "com.musicapp.audio-io", qos: .userInitiated)
     private var cancellables = Set<AnyCancellable>()
@@ -70,7 +109,6 @@ final class MusicLibraryViewModel: ObservableObject {
 
     init(settingsStore: AppSettingsStore) {
         self.settingsStore = settingsStore
-        language = settingsStore.language
         isShuffleOn = settingsStore.shuffleEnabled
         repeatMode = settingsStore.repeatMode
 
@@ -83,26 +121,29 @@ final class MusicLibraryViewModel: ObservableObject {
             Song(id: UUID(), titleEN: "Moonline", titleVI: "Đường Trăng", artist: "Ari Voss", album: "Night Signals", coverSymbol: "moon.stars.fill", audioFileName: "demo_track_3.wav", localFilePath: nil, duration: 196, accent: .cyan)
         ]
 
-        songs = demoSongs
-        featuredSongIDs = Array(demoSongs.prefix(4).map(\.id))
-        favoriteSongIDs = Set([demoSongs[0].id, demoSongs[2].id])
-        playlists = [
+        libraryStore = LibraryStore(
+            songs: demoSongs,
+            featuredSongIDs: Array(demoSongs.prefix(4).map(\.id)),
+            favoriteSongIDs: Set([demoSongs[0].id, demoSongs[2].id])
+        )
+        playlistStore = PlaylistStore(playlists: [
             Playlist(id: UUID(), nameEN: "Late Night Focus", nameVI: "Tập Trung Đêm Khuya", coverSymbol: "moon.fill", songIDs: [demoSongs[0].id, demoSongs[3].id, demoSongs[5].id]),
             Playlist(id: UUID(), nameEN: "Morning Boost", nameVI: "Năng Lượng Sáng", coverSymbol: "sunrise.fill", songIDs: [demoSongs[1].id, demoSongs[2].id]),
             Playlist(id: UUID(), nameEN: "Weekend Chill", nameVI: "Thư Giãn Cuối Tuần", coverSymbol: "beach.umbrella.fill", songIDs: [demoSongs[4].id])
-        ]
+        ])
 
         queueSongs = demoSongs
         queueIndex = 0
         activeSong = demoSongs.first
         currentSongID = demoSongs.first?.id
 
+        bridgeStoreChanges()
+
         ensureMusicStorageFolderExists()
         refreshDeviceTracks()
         settingsStore.didRunInitialMusicScan = true
         bindSettingsStore()
         bindSleepTimerService()
-        configureAudioSession()
         restorePlaybackSnapshotIfAvailable()
     }
 
@@ -204,6 +245,7 @@ final class MusicLibraryViewModel: ObservableObject {
         }
 
         if let player {
+            configureAudioSessionForPlayback()
             player.playImmediately(atRate: Float(playbackSpeed))
             isPlaying = true
             return true
@@ -230,6 +272,7 @@ final class MusicLibraryViewModel: ObservableObject {
             player.pause()
             isPlaying = false
         } else {
+            configureAudioSessionForPlayback()
             player.playImmediately(atRate: Float(playbackSpeed))
             isPlaying = true
         }
@@ -526,7 +569,9 @@ final class MusicLibraryViewModel: ObservableObject {
 
     private func loadAndPlay(song: Song, autoPlay: Bool = true) {
         cleanupPlayerObservers()
-        configureAudioSession()
+        if autoPlay {
+            configureAudioSessionForPlayback()
+        }
         lastPersistedSnapshotSecond = -1
 
         guard let url = audioURL(for: song) else {
@@ -554,11 +599,15 @@ final class MusicLibraryViewModel: ObservableObject {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [.allowAirPlay, .allowBluetoothHFP])
+            try session.setCategory(.playback, mode: .default, options: [])
             try session.setActive(true)
         } catch {
             // Keep app functional even if session activation fails on specific routes/devices.
         }
+    }
+
+    private func configureAudioSessionForPlayback() {
+        configureAudioSession()
     }
 
     private func observePlayer(player: AVPlayer, item: AVPlayerItem, fallbackDuration: Double) {
@@ -732,6 +781,44 @@ final class MusicLibraryViewModel: ObservableObject {
                           bytes[8], bytes[9], bytes[10], bytes[11],
                           bytes[12], bytes[13], bytes[14], bytes[15])
         return UUID(uuid: uuid)
+    }
+
+    private func bridgeStoreChanges() {
+        libraryStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        playlistStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        deviceMediaStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        playerUIStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        userInfoStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
+        settingsStore.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     private func bindSettingsStore() {

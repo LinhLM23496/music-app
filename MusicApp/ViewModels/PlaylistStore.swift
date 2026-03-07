@@ -1,0 +1,41 @@
+import Foundation
+import Combine
+
+@MainActor
+final class PlaylistStore: ObservableObject {
+    @Published var playlists: [Playlist]
+
+    init(playlists: [Playlist]) {
+        self.playlists = playlists
+    }
+
+    func createPlaylist(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        playlists.insert(
+            Playlist(
+                id: UUID(),
+                nameEN: trimmed,
+                nameVI: trimmed,
+                coverSymbol: "music.note.list",
+                songIDs: []
+            ),
+            at: 0
+        )
+    }
+
+    func deletePlaylist(at offsets: IndexSet) {
+        for index in offsets.sorted(by: >) where playlists.indices.contains(index) {
+            playlists.remove(at: index)
+        }
+    }
+
+    func addSong(_ song: Song, to playlistID: UUID) {
+        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
+        if !playlists[playlistIndex].songIDs.contains(song.id) {
+            playlists[playlistIndex].songIDs.append(song.id)
+            playlists[playlistIndex].coverSymbol = song.coverSymbol
+        }
+    }
+}
