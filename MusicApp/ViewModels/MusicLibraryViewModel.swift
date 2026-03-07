@@ -30,6 +30,7 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var playlists: [Playlist] {
         didSet { playlistStore.playlists = playlists }
     }
+
     var language: AppLanguage {
         get { settingsStore.language }
         set {
@@ -47,11 +48,15 @@ final class MusicLibraryViewModel: ObservableObject {
 
     @Published var currentSongID: UUID?
     @Published var isPlaying = false
-    let playbackProgress = PlaybackProgressState()
+    let playbackProgress: PlaybackProgressState
+
     @Published var isShuffleOn: Bool {
         didSet {
             if settingsStore.shuffleEnabled != isShuffleOn {
                 settingsStore.shuffleEnabled = isShuffleOn
+            }
+            if queueStore.isShuffleOn != isShuffleOn {
+                queueStore.isShuffleOn = isShuffleOn
             }
         }
     }
@@ -60,8 +65,12 @@ final class MusicLibraryViewModel: ObservableObject {
             if settingsStore.repeatMode != repeatMode {
                 settingsStore.repeatMode = repeatMode
             }
+            if queueStore.repeatMode != repeatMode {
+                queueStore.repeatMode = repeatMode
+            }
         }
     }
+
     @Published var queueSongs: [Song]
     @Published var queueIndex: Int
     @Published var playbackSpeed: Double = 1.0
@@ -84,67 +93,81 @@ final class MusicLibraryViewModel: ObservableObject {
         didSet { userInfoStore.user = user }
     }
 
-    private var player: AVPlayer?
-    private var timeObserverToken: Any?
-    private var didPlayToEndObserver: NSObjectProtocol?
     private let settingsStore: AppSettingsStore
     private let libraryStore: LibraryStore
     private let playlistStore: PlaylistStore
     private let deviceMediaStore = DeviceMediaStore()
     private let playerUIStore = PlayerUIStore()
     private let userInfoStore = UserInfoStore()
+
+    private let queueStore: QueueStore
+    private let playbackController: PlaybackController
+    private let snapshotStore: PlaybackSnapshotStore
+    private let libraryUseCases = LibraryUseCases()
+    private let playlistUseCases = PlaylistUseCases()
+
     private let sleepTimerService = SleepTimerService()
     private let ioQueue = DispatchQueue(label: "com.musicapp.audio-io", qos: .userInitiated)
+
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
-    private var pauseLiveUpdatesUntil: Date = .distantPast
-    private var lastPersistedSnapshotSecond: Int = -1
     private var didPerformInitialActivationWork = false
+    private var lastPersistedSnapshotSecond: Int = -1
 
-    init(settingsStore: AppSettingsStore) {
+    init(
+        settingsStore: AppSettingsStore,
+        catalogProvider: MusicCatalogProviding? = nil
+    ) {
         self.settingsStore = settingsStore
-        isShuffleOn = settingsStore.shuffleEnabled
-        repeatMode = settingsStore.repeatMode
+        let initialShuffle = settingsStore.shuffleEnabled
+        let initialRepeatMode = settingsStore.repeatMode
+        isShuffleOn = initialShuffle
+        repeatMode = initialRepeatMode
 
-        let demoSongs: [Song] = [
-            Song(id: UUID(), titleEN: "Afterglow", titleVI: "Dư Âm Hoàng Hôn", artist: "Nova Lane", album: "Neon Nights", coverSymbol: "music.note.tv", audioFileName: "demo_track_1.wav", localFilePath: nil, duration: 228, accent: .pink),
-            Song(id: UUID(), titleEN: "Ocean Drive", titleVI: "Đường Ven Biển", artist: "Skyline Echo", album: "City Pulse", coverSymbol: "car.fill", audioFileName: "demo_track_2.wav", localFilePath: nil, duration: 201, accent: .blue),
-            Song(id: UUID(), titleEN: "Dream Circuit", titleVI: "Mạch Mơ", artist: "Synth Bloom", album: "Pulse", coverSymbol: "waveform.path.ecg", audioFileName: "demo_track_3.wav", localFilePath: nil, duration: 245, accent: .mint),
-            Song(id: UUID(), titleEN: "Golden Hour", titleVI: "Giờ Vàng", artist: "Maya Quill", album: "Sunset Tape", coverSymbol: "sun.max.fill", audioFileName: "demo_track_1.wav", localFilePath: nil, duration: 231, accent: .orange),
-            Song(id: UUID(), titleEN: "Lost in Motion", titleVI: "Lạc Trong Chuyển Động", artist: "Vera K", album: "Midnight Run", coverSymbol: "figure.run", audioFileName: "demo_track_2.wav", localFilePath: nil, duration: 214, accent: .purple),
-            Song(id: UUID(), titleEN: "Moonline", titleVI: "Đường Trăng", artist: "Ari Voss", album: "Night Signals", coverSymbol: "moon.stars.fill", audioFileName: "demo_track_3.wav", localFilePath: nil, duration: 196, accent: .cyan)
-        ]
+        let provider = catalogProvider ?? MockMusicCatalogProvider()
+        let initialCatalog = provider.loadInitialCatalog()
+        let initialSongs = initialCatalog.songs
 
         libraryStore = LibraryStore(
-            songs: demoSongs,
-            featuredSongIDs: Array(demoSongs.prefix(4).map(\.id)),
-            favoriteSongIDs: Set([demoSongs[0].id, demoSongs[2].id])
+            songs: initialSongs,
+            featuredSongIDs: initialCatalog.featuredSongIDs,
+            favoriteSongIDs: initialCatalog.favoriteSongIDs
         )
-        playlistStore = PlaylistStore(playlists: [
-            Playlist(id: UUID(), nameEN: "Late Night Focus", nameVI: "Tập Trung Đêm Khuya", coverSymbol: "moon.fill", songIDs: [demoSongs[0].id, demoSongs[3].id, demoSongs[5].id]),
-            Playlist(id: UUID(), nameEN: "Morning Boost", nameVI: "Năng Lượng Sáng", coverSymbol: "sunrise.fill", songIDs: [demoSongs[1].id, demoSongs[2].id]),
-            Playlist(id: UUID(), nameEN: "Weekend Chill", nameVI: "Thư Giãn Cuối Tuần", coverSymbol: "beach.umbrella.fill", songIDs: [demoSongs[4].id])
-        ])
+        playlistStore = PlaylistStore(playlists: initialCatalog.playlists)
+
+        queueStore = QueueStore(
+            queueSongs: initialSongs,
+            queueIndex: 0,
+            isShuffleOn: initialShuffle,
+            repeatMode: initialRepeatMode
+        )
+        playbackController = PlaybackController()
+        playbackProgress = playbackController.progress
+        snapshotStore = PlaybackSnapshotStore(settingsStore: settingsStore)
 
         songs = libraryStore.songs
         featuredSongIDs = libraryStore.featuredSongIDs
         favoriteSongIDs = libraryStore.favoriteSongIDs
         playlists = playlistStore.playlists
         deviceTracks = deviceMediaStore.deviceTracks
+
+        queueSongs = queueStore.queueSongs
+        queueIndex = queueStore.queueIndex
+        activeSong = queueStore.currentSong
+        currentSongID = activeSong?.id
+
         isMiniPlayerHidden = playerUIStore.isMiniPlayerHidden
         playerSheetSong = playerUIStore.playerSheetSong
         musicStorageFolderPath = deviceMediaStore.musicStorageFolderPath
         musicStorageFolderStatus = deviceMediaStore.musicStorageFolderStatus
         user = userInfoStore.user
 
-        queueSongs = demoSongs
-        queueIndex = 0
-        activeSong = demoSongs.first
-        currentSongID = demoSongs.first?.id
-
         ensureMusicStorageFolderExists()
         bindSettingsStore()
+        bindQueueStore()
+        bindPlaybackController()
         bindSleepTimerService()
+        bindProgressSnapshotPersistence()
     }
 
     func handleSceneDidBecomeActive() {
@@ -156,12 +179,11 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     var featuredSongs: [Song] {
-        let featuredSet = Set(featuredSongIDs)
-        return songs.filter { featuredSet.contains($0.id) }
+        libraryUseCases.featuredSongs(songs: songs, featuredSongIDs: featuredSongIDs)
     }
 
     var favoriteSongs: [Song] {
-        songs.filter { favoriteSongIDs.contains($0.id) }
+        libraryUseCases.favoriteSongs(songs: songs, favoriteSongIDs: favoriteSongIDs)
     }
 
     var currentSong: Song? {
@@ -207,7 +229,7 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func song(for id: UUID) -> Song? {
-        songs.first(where: { $0.id == id })
+        libraryUseCases.song(for: id, in: songs)
     }
 
     func isCurrentSong(_ song: Song) -> Bool {
@@ -227,21 +249,12 @@ final class MusicLibraryViewModel: ObservableObject {
             return
         }
 
-        let safeQueue = queue.isEmpty ? [song] : queue
-        queueSongs = safeQueue
-
-        if let index = safeQueue.firstIndex(where: { isSameTrack($0, song) }) {
-            queueIndex = index
-        } else {
-            queueSongs.insert(song, at: 0)
-            queueIndex = 0
-        }
-
-        activeSong = queueSongs[queueIndex]
-        currentSongID = activeSong?.id
+        let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
+        activeSong = selectedSong
+        currentSongID = selectedSong.id
         hasPlaybackSession = true
         isMiniPlayerHidden = false
-        loadAndPlay(song: queueSongs[queueIndex])
+        loadAndPlay(song: selectedSong)
         persistPlaybackSnapshotForCurrentTrack(position: 0)
     }
 
@@ -252,10 +265,8 @@ final class MusicLibraryViewModel: ObservableObject {
             return true
         }
 
-        if let player {
-            configureAudioSessionForPlayback()
-            player.playImmediately(atRate: Float(playbackSpeed))
-            isPlaying = true
+        if playbackController.hasLoadedItem {
+            playbackController.resume(rate: playbackSpeed)
             return true
         }
 
@@ -264,12 +275,12 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func playFromQueue(index: Int) {
-        guard queueSongs.indices.contains(index) else { return }
-        play(song: queueSongs[index], in: queueSongs)
+        guard let song = queueStore.song(at: index) else { return }
+        play(song: song, in: queueStore.queueSongs)
     }
 
     func togglePlayPause() {
-        guard let player else {
+        if !playbackController.hasLoadedItem {
             if let song = currentSong {
                 loadAndPlay(song: song)
             }
@@ -277,12 +288,9 @@ final class MusicLibraryViewModel: ObservableObject {
         }
 
         if isPlaying {
-            player.pause()
-            isPlaying = false
+            playbackController.pause()
         } else {
-            configureAudioSessionForPlayback()
-            player.playImmediately(atRate: Float(playbackSpeed))
-            isPlaying = true
+            playbackController.resume(rate: playbackSpeed)
         }
         persistPlaybackSnapshotForCurrentTrack()
     }
@@ -293,14 +301,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
     func stopAndResetPlayback() {
         cancelSleepTimer()
-        player?.pause()
-        isPlaying = false
-
-        let duration = playbackProgress.duration > 0 ? playbackProgress.duration : (currentSong?.duration ?? 1)
-        player?.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero)
-        playbackProgress.currentTime = 0
-        playbackProgress.progress = 0
-        playbackProgress.duration = max(duration, 1)
+        playbackController.stopAndReset(fallbackDuration: currentSong?.duration ?? 1)
         persistPlaybackSnapshotForCurrentTrack(position: 0)
     }
 
@@ -309,28 +310,19 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func stopPlaybackAndHideMiniPlayer() {
-        player?.pause()
-        isPlaying = false
         cancelSleepTimer()
-        cleanupPlayerObservers()
-        player = nil
+        playbackController.stopAndClear()
         activeSong = nil
         currentSongID = nil
         hasPlaybackSession = false
         isMiniPlayerHidden = false
-        queueSongs = []
-        queueIndex = 0
-        playbackProgress.progress = 0
-        playbackProgress.currentTime = 0
-        playbackProgress.duration = 1
-        settingsStore.savePlaybackSnapshot(nil)
+        queueStore.reset()
+        snapshotStore.clear()
     }
 
     func setPlaybackSpeed(_ speed: Double) {
         playbackSpeed = speed
-        if isPlaying {
-            player?.rate = Float(speed)
-        }
+        playbackController.setRateIfPlaying(speed)
     }
 
     func setSleepTimer(minutes: Double?) {
@@ -341,8 +333,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
         sleepTimerService.start(minutes: minutes) { [weak self] in
             guard let self else { return }
-            self.player?.pause()
-            self.isPlaying = false
+            self.playbackController.pause()
         }
     }
 
@@ -351,24 +342,18 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func pauseLiveProgressUpdates(seconds: Double) {
-        pauseLiveUpdatesUntil = Date().addingTimeInterval(seconds)
+        playbackController.pauseLiveProgressUpdates(seconds: seconds)
     }
 
     func resumeLiveProgressUpdates() {
-        pauseLiveUpdatesUntil = .distantPast
+        playbackController.resumeLiveProgressUpdates()
     }
 
     func seek(to normalizedProgress: Double) {
-        guard let player else { return }
-
         let duration = playbackProgress.duration > 0 ? playbackProgress.duration : (currentSong?.duration ?? 1)
         let clamped = min(max(normalizedProgress, 0), 1)
         let seconds = duration * clamped
-        let target = CMTime(seconds: seconds, preferredTimescale: 600)
-
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
-        playbackProgress.progress = clamped
-        playbackProgress.currentTime = seconds
+        playbackController.seek(to: seconds)
         persistPlaybackSnapshotForCurrentTrack(position: seconds)
     }
 
@@ -380,11 +365,10 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func toggleFavorite(for song: Song) {
-        if favoriteSongIDs.contains(song.id) {
-            favoriteSongIDs.remove(song.id)
-        } else {
-            favoriteSongIDs.insert(song.id)
-        }
+        favoriteSongIDs = libraryUseCases.toggleFavorite(
+            songID: song.id,
+            currentFavorites: favoriteSongIDs
+        )
     }
 
     func nextSong() {
@@ -392,36 +376,13 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func previousSong() {
-        rewindToPreviousSongOrStart()
-    }
-
-    private func rewindToPreviousSongOrStart() {
-        guard !queueSongs.isEmpty else { return }
-
-        if playbackProgress.currentTime > 3 {
+        switch queueStore.previousAction(currentTime: playbackProgress.currentTime) {
+        case .seekToStart:
             seek(to: 0)
-            return
-        }
-
-        if isShuffleOn, queueSongs.count > 1 {
-            var randomIndex = queueIndex
-            while randomIndex == queueIndex {
-                randomIndex = Int.random(in: 0..<queueSongs.count)
-            }
-            play(song: queueSongs[randomIndex], in: queueSongs)
-            return
-        }
-
-        let previousIndex = queueIndex - 1
-        if previousIndex >= 0 {
-            play(song: queueSongs[previousIndex], in: queueSongs)
-            return
-        }
-
-        if repeatMode == .all, let last = queueSongs.indices.last {
-            play(song: queueSongs[last], in: queueSongs)
-        } else {
-            seek(to: 0)
+        case .play(let song):
+            play(song: song, in: queueStore.queueSongs)
+        case .none:
+            break
         }
     }
 
@@ -437,36 +398,19 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     func createPlaylist(name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        playlists.insert(
-            Playlist(
-                id: UUID(),
-                nameEN: trimmed,
-                nameVI: trimmed,
-                coverSymbol: "music.note.list",
-                songIDs: []
-            ),
-            at: 0
-        )
+        playlists = playlistUseCases.createPlaylist(name: name, in: playlists)
     }
 
     func deletePlaylist(at offsets: IndexSet) {
-        playlists.remove(atOffsets: offsets)
+        playlists = playlistUseCases.deletePlaylists(at: offsets, in: playlists)
     }
 
     func addSong(_ song: Song, to playlistID: UUID) {
-        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
-        if !playlists[playlistIndex].songIDs.contains(song.id) {
-            playlists[playlistIndex].songIDs.append(song.id)
-            playlists[playlistIndex].coverSymbol = song.coverSymbol
-        }
+        playlists = playlistUseCases.addSong(song, to: playlistID, in: playlists)
     }
 
     func songs(in playlist: Playlist) -> [Song] {
-        let songMap = Dictionary(uniqueKeysWithValues: songs.map { ($0.id, $0) })
-        return playlist.songIDs.compactMap { songMap[$0] }
+        playlistUseCases.songs(in: playlist, allSongs: songs)
     }
 
     func refreshDeviceTracks() {
@@ -561,105 +505,18 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     private func suggestedQueue(for song: Song) -> [Song] {
-        if songs.contains(where: { $0.id == song.id }) {
-            return songs
-        }
-
-        if song.localFilePath != nil {
-            let deviceQueue = deviceTracks.map(songForDeviceTrack)
-            if !deviceQueue.isEmpty {
-                return deviceQueue
-            }
-        }
-
-        return [song]
+        libraryUseCases.suggestedQueue(
+            for: song,
+            songs: songs,
+            deviceTracks: deviceTracks,
+            trackToSong: songForDeviceTrack
+        )
     }
 
     private func loadAndPlay(song: Song, autoPlay: Bool = true) {
-        cleanupPlayerObservers()
-        if autoPlay {
-            configureAudioSessionForPlayback()
-        }
         lastPersistedSnapshotSecond = -1
-
-        guard let url = audioURL(for: song) else {
-            isPlaying = false
-            playbackProgress.progress = 0
-            playbackProgress.currentTime = 0
-            playbackProgress.duration = song.duration
-            return
-        }
-
-        let item = AVPlayerItem(url: url)
-        let player = AVPlayer(playerItem: item)
-        self.player = player
-
-        observePlayer(player: player, item: item, fallbackDuration: song.duration)
-        if autoPlay {
-            player.playImmediately(atRate: Float(playbackSpeed))
-            isPlaying = true
-        } else {
-            player.pause()
-            isPlaying = false
-        }
-    }
-
-    private func configureAudioSession() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
-            try session.setActive(true)
-        } catch {
-            // Keep app functional even if session activation fails on specific routes/devices.
-        }
-    }
-
-    private func configureAudioSessionForPlayback() {
-        configureAudioSession()
-    }
-
-    private func observePlayer(player: AVPlayer, item: AVPlayerItem, fallbackDuration: Double) {
-        let interval = CMTime(seconds: 0.2, preferredTimescale: 600)
-        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            Task { @MainActor [weak self] in
-                self?.handlePeriodicTimeUpdate(time: time, item: item, fallbackDuration: fallbackDuration)
-            }
-        }
-
-        didPlayToEndObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.handleSongDidFinish()
-            }
-        }
-    }
-
-    private func handlePeriodicTimeUpdate(time: CMTime, item: AVPlayerItem, fallbackDuration: Double) {
-        if Date() < pauseLiveUpdatesUntil { return }
-
-        let seconds = time.seconds
-        if seconds.isFinite {
-            playbackProgress.currentTime = max(0, seconds)
-        }
-
-        let duration = item.duration.seconds
-        if duration.isFinite, duration > 0 {
-            playbackProgress.duration = duration
-        } else {
-            playbackProgress.duration = fallbackDuration
-        }
-
-        let total = playbackProgress.duration > 0 ? playbackProgress.duration : fallbackDuration
-        playbackProgress.progress = min(max(playbackProgress.currentTime / max(total, 0.001), 0), 1)
-
-        let wholeSecond = Int(playbackProgress.currentTime.rounded(.down))
-        if wholeSecond >= 0, wholeSecond % 5 == 0, wholeSecond != lastPersistedSnapshotSecond {
-            lastPersistedSnapshotSecond = wholeSecond
-            persistPlaybackSnapshotForCurrentTrack(position: playbackProgress.currentTime)
-        }
+        let url = audioURL(for: song)
+        playbackController.load(song: song, audioURL: url, autoPlay: autoPlay, playbackRate: playbackSpeed)
     }
 
     private func audioURL(for song: Song) -> URL? {
@@ -749,7 +606,7 @@ final class MusicLibraryViewModel: ObservableObject {
         return files
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
             .map { url in
-                return LocalAudioTrack(
+                LocalAudioTrack(
                     id: url,
                     url: url,
                     fileName: url.lastPathComponent,
@@ -808,6 +665,34 @@ final class MusicLibraryViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    private func bindQueueStore() {
+        queueStore.$queueSongs
+            .sink { [weak self] value in
+                self?.queueSongs = value
+            }
+            .store(in: &cancellables)
+
+        queueStore.$queueIndex
+            .sink { [weak self] value in
+                self?.queueIndex = value
+            }
+            .store(in: &cancellables)
+    }
+
+    private func bindPlaybackController() {
+        playbackController.$isPlaying
+            .removeDuplicates()
+            .sink { [weak self] value in
+                self?.isPlaying = value
+            }
+            .store(in: &cancellables)
+
+        playbackController.onDidFinish = { [weak self] in
+            guard let self else { return }
+            self.handleSongDidFinish()
+        }
+    }
+
     private func bindSleepTimerService() {
         sleepTimerService.$remaining
             .receive(on: DispatchQueue.main)
@@ -817,51 +702,51 @@ final class MusicLibraryViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    private func bindProgressSnapshotPersistence() {
+        playbackProgress.$currentTime
+            .sink { [weak self] time in
+                guard let self else { return }
+                let wholeSecond = Int(time.rounded(.down))
+                if wholeSecond >= 0,
+                   wholeSecond % 5 == 0,
+                   wholeSecond != self.lastPersistedSnapshotSecond,
+                   self.hasPlaybackSession {
+                    self.lastPersistedSnapshotSecond = wholeSecond
+                    self.persistPlaybackSnapshotForCurrentTrack(position: time)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
     func savePlaybackSnapshotNow() {
         persistPlaybackSnapshotForCurrentTrack()
     }
 
     private func persistPlaybackSnapshotForCurrentTrack(position: Double? = nil) {
-        guard let song = currentSong else { return }
         let snapshotPosition = max(position ?? playbackProgress.currentTime, 0)
-
-        settingsStore.savePlaybackSnapshot(
-            PlaybackSnapshot(
-                audioFileName: song.audioFileName,
-                titleEN: song.titleEN,
-                localFilePath: song.localFilePath,
-                positionSeconds: snapshotPosition
-            )
-        )
+        snapshotStore.save(song: currentSong, position: snapshotPosition)
     }
 
     private func restorePlaybackSnapshotIfAvailable() {
-        guard let snapshot = settingsStore.loadPlaybackSnapshot() else { return }
+        guard let snapshot = snapshotStore.load() else { return }
         guard let restoredSong = resolveSong(for: snapshot) else { return }
 
         let restoredQueue = suggestedQueue(for: restoredSong)
-        let safeQueue = restoredQueue.isEmpty ? [restoredSong] : restoredQueue
+        let selectedSong = queueStore.setQueue(current: restoredSong, in: restoredQueue, isSameTrack: isSameTrack)
 
-        queueSongs = safeQueue
-        queueIndex = safeQueue.firstIndex(where: { isSameTrack($0, restoredSong) }) ?? 0
-        activeSong = safeQueue[queueIndex]
-        currentSongID = activeSong?.id
+        activeSong = selectedSong
+        currentSongID = selectedSong.id
         hasPlaybackSession = true
         isMiniPlayerHidden = false
 
-        loadAndPlay(song: safeQueue[queueIndex], autoPlay: false)
-        let estimatedDuration = max(safeQueue[queueIndex].duration, 1)
+        loadAndPlay(song: selectedSong, autoPlay: false)
+
+        let estimatedDuration = max(selectedSong.duration, 1)
         let clampedPosition = min(max(snapshot.positionSeconds, 0), estimatedDuration)
         if clampedPosition > 0 {
-            let seekTime = CMTime(seconds: clampedPosition, preferredTimescale: 600)
-            player?.seek(to: seekTime, toleranceBefore: .zero, toleranceAfter: .zero)
-            playbackProgress.currentTime = clampedPosition
-            let total = max(estimatedDuration, 1)
-            playbackProgress.progress = min(max(clampedPosition / total, 0), 1)
+            playbackController.seek(to: clampedPosition)
         }
-
-        player?.pause()
-        isPlaying = false
+        playbackController.pause()
     }
 
     private func resolveSong(for snapshot: PlaybackSnapshot) -> Song? {
@@ -897,9 +782,8 @@ final class MusicLibraryViewModel: ObservableObject {
 
     private func handleSongDidFinish() {
         if repeatMode == .one {
-            player?.seek(to: .zero)
-            player?.playImmediately(atRate: Float(playbackSpeed))
-            isPlaying = true
+            playbackController.seek(to: 0)
+            playbackController.resume(rate: playbackSpeed)
             return
         }
 
@@ -907,38 +791,16 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     private func advanceToNext(autoTriggered: Bool) {
-        guard !queueSongs.isEmpty else { return }
-
-        if isShuffleOn, queueSongs.count > 1 {
-            var randomIndex = queueIndex
-            while randomIndex == queueIndex {
-                randomIndex = Int.random(in: 0..<queueSongs.count)
-            }
-            play(song: queueSongs[randomIndex], in: queueSongs)
-            return
-        }
-
-        let nextIndex = queueIndex + 1
-        if queueSongs.indices.contains(nextIndex) {
-            play(song: queueSongs[nextIndex], in: queueSongs)
-            return
-        }
-
-        if repeatMode == .all {
-            play(song: queueSongs[0], in: queueSongs)
-            return
-        }
-
-        if repeatMode == .off || autoTriggered {
+        switch queueStore.nextAction(autoTriggered: autoTriggered) {
+        case .play(let song):
+            play(song: song, in: queueStore.queueSongs)
+        case .stopAtEnd:
             stopPlaybackAtEnd()
         }
     }
 
     private func stopPlaybackAtEnd() {
-        player?.pause()
-        isPlaying = false
-        playbackProgress.progress = 1
-        playbackProgress.currentTime = playbackProgress.duration
+        playbackController.stopAtEnd()
     }
 
     private func isSameTrack(_ lhs: Song?, _ rhs: Song?) -> Bool {
@@ -953,17 +815,5 @@ final class MusicLibraryViewModel: ObservableObject {
         }
 
         return lhs.audioFileName == rhs.audioFileName && lhs.titleEN == rhs.titleEN
-    }
-
-    private func cleanupPlayerObservers() {
-        if let token = timeObserverToken {
-            player?.removeTimeObserver(token)
-            timeObserverToken = nil
-        }
-
-        if let observer = didPlayToEndObserver {
-            NotificationCenter.default.removeObserver(observer)
-            didPlayToEndObserver = nil
-        }
     }
 }
