@@ -1,6 +1,12 @@
 import Foundation
 import Combine
 
+struct HomeImportResult {
+    let importedCount: Int
+    let skippedCount: Int
+    let failedCount: Int
+}
+
 @MainActor
 protocol FeatureControlling: AnyObject {
     var changePublisher: AnyPublisher<Void, Never> { get }
@@ -17,8 +23,8 @@ protocol HomeFeatureControlling: FeatureControlling {
     func presentPlayer(for song: Song)
     func refreshDeviceTracks()
     func songForDeviceTrack(_ track: LocalAudioTrack) -> Song
-    func importAudioFiles(from urls: [URL], completion: @escaping (MusicLibraryViewModel.ImportResult) -> Void)
-    func importSummaryText(_ result: MusicLibraryViewModel.ImportResult) -> String
+    func importAudioFiles(from urls: [URL], completion: @escaping (HomeImportResult) -> Void)
+    func importSummaryText(_ result: HomeImportResult) -> String
 }
 
 @MainActor

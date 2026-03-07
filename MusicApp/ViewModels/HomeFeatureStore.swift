@@ -88,13 +88,13 @@ final class HomeFeatureStore: ObservableObject, HomeFeatureControlling {
         }
     }
 
-    func importAudioFiles(from urls: [URL], completion: @escaping (MusicLibraryViewModel.ImportResult) -> Void) {
+    func importAudioFiles(from urls: [URL], completion: @escaping (HomeImportResult) -> Void) {
         let ensureResult = deviceMediaService.ensureStorageFolderExists(localized: localized)
         deviceMediaStore.musicStorageFolderPath = ensureResult.path
         deviceMediaStore.musicStorageFolderStatus = ensureResult.status
 
         guard let destinationFolder = ensureResult.folderURL else {
-            completion(MusicLibraryViewModel.ImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count))
+            completion(HomeImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count))
             return
         }
 
@@ -106,7 +106,7 @@ final class HomeFeatureStore: ObservableObject, HomeFeatureControlling {
                 destinationFolder: destinationFolder
             )
 
-            let result = MusicLibraryViewModel.ImportResult(
+            let result = HomeImportResult(
                 importedCount: counts.imported,
                 skippedCount: counts.skipped,
                 failedCount: counts.failed
@@ -120,7 +120,7 @@ final class HomeFeatureStore: ObservableObject, HomeFeatureControlling {
         }
     }
 
-    func importSummaryText(_ result: MusicLibraryViewModel.ImportResult) -> String {
+    func importSummaryText(_ result: HomeImportResult) -> String {
         String(
             format: localized("home.device.music.import.result"),
             result.importedCount,

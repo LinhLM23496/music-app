@@ -25,10 +25,10 @@ final class HomeViewModel: ObservableObject {
     func presentPlayer(for song: Song) { source.presentPlayer(for: song) }
     func refreshDeviceTracks() { source.refreshDeviceTracks() }
     func songForDeviceTrack(_ track: LocalAudioTrack) -> Song { source.songForDeviceTrack(track) }
-    func importAudioFiles(from urls: [URL], completion: @escaping (MusicLibraryViewModel.ImportResult) -> Void) {
+    func importAudioFiles(from urls: [URL], completion: @escaping (HomeImportResult) -> Void) {
         source.importAudioFiles(from: urls, completion: completion)
     }
-    func importSummaryText(_ result: MusicLibraryViewModel.ImportResult) -> String {
+    func importSummaryText(_ result: HomeImportResult) -> String {
         source.importSummaryText(result)
     }
 }
