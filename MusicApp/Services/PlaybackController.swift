@@ -24,12 +24,12 @@ final class PlaybackController: ObservableObject {
 
     func load(song: Song, audioURL: URL?, autoPlay: Bool, playbackRate: Double) {
         cleanup()
+        progress.progress = 0
+        progress.currentTime = 0
+        progress.duration = max(song.duration, 1)
 
         guard let audioURL else {
             isPlaying = false
-            progress.progress = 0
-            progress.currentTime = 0
-            progress.duration = song.duration
             return
         }
 
