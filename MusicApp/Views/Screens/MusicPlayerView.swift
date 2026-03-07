@@ -168,9 +168,11 @@ struct MusicPlayerView: View {
             .foregroundStyle(.white)
         }
         .onAppear {
-            uiState.bind(to: controller)
-            if !controller.isCurrentSong(song) {
-                controller.play(song: song)
+            DispatchQueue.main.async {
+                uiState.bind(to: controller)
+                if !controller.isCurrentSong(song) {
+                    controller.play(song: song)
+                }
             }
         }
         .sheet(isPresented: $showQueueSheet) {

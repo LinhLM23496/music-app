@@ -94,8 +94,8 @@ struct MiniPlayerBarView: View {
         }
         .foregroundStyle(.white)
         .background {
-            SystemChromeMaterialView()
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial)
                 .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(Color.white.opacity(0.04), lineWidth: 0.35)
@@ -176,15 +176,5 @@ private struct MiniPlayerProgressBar: View {
                     .frame(width: width * clampedProgress)
             }
         }
-    }
-}
-
-private struct SystemChromeMaterialView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIVisualEffectView {
-        UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-    }
-
-    func updateUIView(_ uiView: UIVisualEffectView, context: Context) {
-        uiView.effect = UIBlurEffect(style: .systemUltraThinMaterial)
     }
 }

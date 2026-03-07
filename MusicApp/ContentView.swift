@@ -3,8 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore = AppSettingsStore.shared
-    @StateObject private var vm = MusicLibraryViewModel()
-    @State private var selectedSong: Song?
+    @StateObject private var vm = MusicLibraryViewModel(settingsStore: .shared)
 
     var body: some View {
         TabView {
@@ -34,7 +33,7 @@ struct ContentView: View {
                     onNext: { vm.nextSong() },
                     onHide: { vm.hideMiniPlayer() },
                     onStop: { vm.stopAndResetPlayback() },
-                    onOpen: { selectedSong = currentSong }
+                    onOpen: { vm.presentPlayer(for: currentSong) }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -44,14 +43,25 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .environmentObject(vm)
         .environmentObject(settingsStore)
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                vm.refreshDeviceTracks()
-            } else if newPhase == .inactive || newPhase == .background {
-                vm.savePlaybackSnapshotNow()
+        .task {
+            if scenePhase == .active {
+                DispatchQueue.main.async {
+                    vm.handleSceneDidBecomeActive()
+                }
             }
         }
-        .sheet(item: $selectedSong) { song in
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                DispatchQueue.main.async {
+                    vm.handleSceneDidBecomeActive()
+                }
+            } else if newPhase == .inactive || newPhase == .background {
+                DispatchQueue.main.async {
+                    vm.savePlaybackSnapshotNow()
+                }
+            }
+        }
+        .sheet(item: $vm.playerSheetSong) { song in
             MusicPlayerView(song: song, controller: vm)
         }
     }

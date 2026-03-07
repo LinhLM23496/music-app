@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 
 struct HomeTabView: View {
     @EnvironmentObject private var vm: MusicLibraryViewModel
-    @State private var selectedSong: Song?
     @State private var showImporter = false
     @State private var importMessage: String?
 
@@ -18,7 +17,7 @@ struct HomeTabView: View {
                             ForEach(vm.featuredSongs) { song in
                                 Button {
                                     vm.play(song: song)
-                                    selectedSong = song
+                                    vm.presentPlayer(for: song)
                                 } label: {
                                     VStack(alignment: .leading, spacing: 8) {
                                         AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent)
@@ -44,7 +43,7 @@ struct HomeTabView: View {
                         ForEach(vm.favoriteSongs) { song in
                             Button {
                                 vm.play(song: song)
-                                selectedSong = song
+                                vm.presentPlayer(for: song)
                             } label: {
                                 SongRowView(song: song, title: vm.localizedSongTitle(song), isFavorite: true)
                             }
@@ -79,7 +78,7 @@ struct HomeTabView: View {
                                 Button {
                                     let deviceSong = vm.songForDeviceTrack(track)
                                     vm.play(song: deviceSong)
-                                    selectedSong = deviceSong
+                                    vm.presentPlayer(for: deviceSong)
                                 } label: {
                                     HStack(spacing: 12) {
                                         AlbumArtworkView(symbol: "waveform", accent: .green, cornerRadius: 12)
@@ -114,9 +113,6 @@ struct HomeTabView: View {
             }
             .background(Color.black.ignoresSafeArea())
             .navigationTitle(vm.localized("home.title"))
-        }
-        .sheet(item: $selectedSong) { song in
-            MusicPlayerView(song: song, controller: vm)
         }
         .fileImporter(
             isPresented: $showImporter,
