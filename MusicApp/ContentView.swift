@@ -2,22 +2,19 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var settingsStore: AppSettingsStore
-    @StateObject private var appVM: MusicLibraryViewModel
+    @StateObject private var coordinator: AppCoordinator
     @StateObject private var homeVM: HomeViewModel
     @StateObject private var playlistVM: PlaylistViewModel
     @StateObject private var infoVM: InfoViewModel
     @StateObject private var playerVM: PlayerViewModel
 
     init() {
-        let settings = AppSettingsStore.shared
-        let app = MusicLibraryViewModel(settingsStore: .shared)
-        _settingsStore = StateObject(wrappedValue: settings)
-        _appVM = StateObject(wrappedValue: app)
-        _homeVM = StateObject(wrappedValue: HomeViewModel(source: app))
-        _playlistVM = StateObject(wrappedValue: PlaylistViewModel(source: app))
-        _infoVM = StateObject(wrappedValue: InfoViewModel(source: app, settingsStore: settings))
-        _playerVM = StateObject(wrappedValue: PlayerViewModel(source: app))
+        let coordinator = AppCoordinator()
+        _coordinator = StateObject(wrappedValue: coordinator)
+        _homeVM = StateObject(wrappedValue: HomeViewModel(source: coordinator.homeFeatureStore))
+        _playlistVM = StateObject(wrappedValue: PlaylistViewModel(source: coordinator.playlistFeatureStore))
+        _infoVM = StateObject(wrappedValue: InfoViewModel(source: coordinator.infoFeatureStore, settingsStore: coordinator.settingsStore))
+        _playerVM = StateObject(wrappedValue: PlayerViewModel(source: coordinator.playerFeatureStore))
     }
 
     var body: some View {
@@ -59,18 +56,18 @@ struct ContentView: View {
         .task {
             if scenePhase == .active {
                 DispatchQueue.main.async {
-                    appVM.handleSceneDidBecomeActive()
+                    coordinator.handleSceneDidBecomeActive()
                 }
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 DispatchQueue.main.async {
-                    appVM.handleSceneDidBecomeActive()
+                    coordinator.handleSceneDidBecomeActive()
                 }
             } else if newPhase == .inactive || newPhase == .background {
                 DispatchQueue.main.async {
-                    appVM.savePlaybackSnapshotNow()
+                    coordinator.savePlaybackSnapshotNow()
                 }
             }
         }
