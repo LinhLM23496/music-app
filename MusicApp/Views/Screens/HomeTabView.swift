@@ -7,7 +7,8 @@ struct HomeTabView: View {
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @EnvironmentObject private var playerViewModel: PlayerViewModel
     @State private var showImporter = false
-    @State private var importMessage: String?
+    @State private var importToast: String?
+    @State private var importToastWorkItem: DispatchWorkItem?
 
     private var favoriteSongs: [Song] {
         let libraryFavorites = libraryViewModel.tracks.filter { libraryViewModel.favoriteIDs.contains($0.id) }
@@ -136,31 +137,36 @@ struct HomeTabView: View {
             switch result {
             case .success(let urls):
                 importViewModel.importAudioFiles(from: urls) { importResult in
-                    importMessage = importViewModel.importSummaryText(importResult)
+                    showImportToast(importViewModel.importSummaryText(importResult))
                 }
             case .failure:
-                importMessage = localizationViewModel.t("home.device.music.import.error")
+                showImportToast(localizationViewModel.t("home.device.music.import.error"))
             }
         }
-        .alert(localizationViewModel.t("home.device.music.import"), isPresented: Binding(
-            get: { importMessage != nil },
-            set: { isShowing in
-                if !isShowing {
-                    importMessage = nil
-                }
+        .overlay(alignment: .top) {
+            if let importToast {
+                AppToastView(message: importToast)
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-        )) {
-            Button(localizationViewModel.t("common.done"), role: .cancel) {
-                importMessage = nil
-            }
-        } message: {
-            Text(importMessage ?? "")
         }
+        .animation(.easeInOut(duration: 0.22), value: importToast != nil)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text)
             .font(.title3.weight(.semibold))
             .foregroundStyle(.white)
+    }
+
+    private func showImportToast(_ message: String) {
+        importToastWorkItem?.cancel()
+        importToast = message
+
+        let workItem = DispatchWorkItem {
+            importToast = nil
+        }
+        importToastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: workItem)
     }
 }

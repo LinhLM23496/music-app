@@ -4,10 +4,20 @@ struct PlaylistTabView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
+    @EnvironmentObject private var importViewModel: ImportViewModel
 
     @State private var showingCreatePlaylist = false
     @State private var newPlaylistName = ""
     @State private var selectedPlaylistForAdd: Playlist?
+    @State private var toastMessage: String?
+    @State private var toastWorkItem: DispatchWorkItem?
+
+    private var allSongs: [Song] {
+        var combined = libraryViewModel.tracks
+        let existingIDs = Set(combined.map(\.id))
+        combined.append(contentsOf: importViewModel.importedSongs.filter { !existingIDs.contains($0.id) })
+        return combined
+    }
 
     var body: some View {
         NavigationStack {
@@ -45,15 +55,29 @@ struct PlaylistTabView: View {
             }
         }
         .sheet(item: $selectedPlaylistForAdd) { playlist in
-            AddSongToPlaylistView(playlist: playlist)
+            AddSongToPlaylistView(
+                playlist: playlist,
+                songs: allSongs,
+                onSongAdded: {
+                    showToast(localizationViewModel.t("playlist.add.song.success"))
+                }
+            )
                 .environmentObject(localizationViewModel)
                 .environmentObject(playlistViewModel)
                 .environmentObject(libraryViewModel)
         }
+        .overlay(alignment: .top) {
+            if let toastMessage {
+                AppToastView(message: toastMessage)
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: toastMessage != nil)
     }
 
     private func playlistRow(_ playlist: Playlist) -> some View {
-        let playlistSongs = playlistViewModel.songs(in: playlist, allSongs: libraryViewModel.tracks)
+        let playlistSongs = playlistViewModel.songs(in: playlist, allSongs: allSongs)
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -90,10 +114,23 @@ struct PlaylistTabView: View {
         .padding(12)
         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
+
+    private func showToast(_ message: String) {
+        toastWorkItem?.cancel()
+        toastMessage = message
+
+        let workItem = DispatchWorkItem {
+            toastMessage = nil
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: workItem)
+    }
 }
 
 struct AddSongToPlaylistView: View {
     let playlist: Playlist
+    let songs: [Song]
+    let onSongAdded: () -> Void
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
@@ -101,9 +138,10 @@ struct AddSongToPlaylistView: View {
 
     var body: some View {
         NavigationStack {
-            List(libraryViewModel.tracks) { song in
+            List(songs) { song in
                 Button {
                     playlistViewModel.addSong(song, to: playlist.id)
+                    onSongAdded()
                 } label: {
                     SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
                 }
