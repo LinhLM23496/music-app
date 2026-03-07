@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import AVFoundation
 import CryptoKit
 
 @MainActor
@@ -18,9 +17,6 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var songs: [Song] {
         didSet { libraryStore.songs = songs }
     }
-    @Published var deviceTracks: [LocalAudioTrack] {
-        didSet { deviceMediaStore.deviceTracks = deviceTracks }
-    }
     @Published var featuredSongIDs: [UUID] {
         didSet { libraryStore.featuredSongIDs = featuredSongIDs }
     }
@@ -29,6 +25,12 @@ final class MusicLibraryViewModel: ObservableObject {
     }
     @Published var playlists: [Playlist] {
         didSet { playlistStore.playlists = playlists }
+    }
+    @Published var importedTracks: [LocalAudioTrack] {
+        didSet {
+            guard shouldPersistImportedTracks else { return }
+            persistImportedTracks()
+        }
     }
 
     var language: AppLanguage {
@@ -82,13 +84,6 @@ final class MusicLibraryViewModel: ObservableObject {
         didSet { playerUIStore.playerSheetSong = playerSheetSong }
     }
     @Published var sleepTimerRemaining: Double?
-    @Published var musicStorageFolderPath: String {
-        didSet { deviceMediaStore.musicStorageFolderPath = musicStorageFolderPath }
-    }
-    @Published var musicStorageFolderStatus: String {
-        didSet { deviceMediaStore.musicStorageFolderStatus = musicStorageFolderStatus }
-    }
-
     @Published var user: AppUser {
         didSet { userInfoStore.user = user }
     }
@@ -96,7 +91,6 @@ final class MusicLibraryViewModel: ObservableObject {
     private let settingsStore: AppSettingsStore
     private let libraryStore: LibraryStore
     private let playlistStore: PlaylistStore
-    private let deviceMediaStore = DeviceMediaStore()
     private let playerUIStore = PlayerUIStore()
     private let userInfoStore = UserInfoStore()
 
@@ -113,6 +107,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private var activeSong: Song?
     private var didPerformInitialActivationWork = false
     private var lastPersistedSnapshotSecond: Int = -1
+    private var shouldPersistImportedTracks = false
 
     init(
         settingsStore: AppSettingsStore,
@@ -149,7 +144,7 @@ final class MusicLibraryViewModel: ObservableObject {
         featuredSongIDs = libraryStore.featuredSongIDs
         favoriteSongIDs = libraryStore.favoriteSongIDs
         playlists = playlistStore.playlists
-        deviceTracks = deviceMediaStore.deviceTracks
+        importedTracks = []
 
         queueSongs = queueStore.queueSongs
         queueIndex = queueStore.queueIndex
@@ -158,11 +153,12 @@ final class MusicLibraryViewModel: ObservableObject {
 
         isMiniPlayerHidden = playerUIStore.isMiniPlayerHidden
         playerSheetSong = playerUIStore.playerSheetSong
-        musicStorageFolderPath = deviceMediaStore.musicStorageFolderPath
-        musicStorageFolderStatus = deviceMediaStore.musicStorageFolderStatus
         user = userInfoStore.user
 
         ensureMusicStorageFolderExists()
+        restoreImportedTracks()
+        shouldPersistImportedTracks = true
+        persistImportedTracks()
         bindSettingsStore()
         bindQueueStore()
         bindPlaybackController()
@@ -175,7 +171,6 @@ final class MusicLibraryViewModel: ObservableObject {
             didPerformInitialActivationWork = true
             restorePlaybackSnapshotIfAvailable()
         }
-        refreshDeviceTracks()
     }
 
     var featuredSongs: [Song] {
@@ -186,6 +181,10 @@ final class MusicLibraryViewModel: ObservableObject {
         libraryUseCases.favoriteSongs(songs: songs, favoriteSongIDs: favoriteSongIDs)
     }
 
+    var importedSongs: [Song] {
+        importedTracks.map(songForImportedTrack)
+    }
+
     var currentSong: Song? {
         if let activeSong {
             return activeSong
@@ -193,6 +192,7 @@ final class MusicLibraryViewModel: ObservableObject {
 
         guard let currentSongID else { return nil }
         return songs.first(where: { $0.id == currentSongID })
+            ?? importedSongs.first(where: { $0.id == currentSongID })
     }
 
     var shouldShowMiniPlayer: Bool {
@@ -240,7 +240,7 @@ final class MusicLibraryViewModel: ObservableObject {
         if resumeIfCurrentSong(song) {
             return
         }
-        let autoQueue = suggestedQueue(for: song)
+        let autoQueue = libraryUseCases.suggestedQueue(for: song, songs: songs, importedSongs: importedSongs)
         play(song: song, in: autoQueue)
     }
 
@@ -248,6 +248,8 @@ final class MusicLibraryViewModel: ObservableObject {
         if resumeIfCurrentSong(song) {
             return
         }
+
+        guard audioURL(for: song) != nil else { return }
 
         let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
         activeSong = selectedSong
@@ -413,22 +415,6 @@ final class MusicLibraryViewModel: ObservableObject {
         playlistUseCases.songs(in: playlist, allSongs: songs)
     }
 
-    func refreshDeviceTracks() {
-        ensureMusicStorageFolderExists()
-
-        guard let musicFolderURL = musicStorageFolderURL() else {
-            deviceTracks = []
-            return
-        }
-
-        ioQueue.async { [weak self] in
-            let tracks = Self.loadDeviceTracks(in: musicFolderURL)
-            Task { @MainActor [weak self] in
-                self?.deviceTracks = tracks
-            }
-        }
-    }
-
     func importAudioFiles(from urls: [URL], completion: @escaping (ImportResult) -> Void) {
         ensureMusicStorageFolderExists()
 
@@ -437,11 +423,12 @@ final class MusicLibraryViewModel: ObservableObject {
             return
         }
 
-        ioQueue.async { [weak self] in
+        ioQueue.async {
             let supportedExtensions = Set(["mp3", "m4a", "wav", "aac"])
             var imported = 0
             var skipped = 0
             var failed = 0
+            var importedTracks: [LocalAudioTrack] = []
 
             for sourceURL in urls {
                 let accessed = sourceURL.startAccessingSecurityScopedResource()
@@ -460,21 +447,43 @@ final class MusicLibraryViewModel: ObservableObject {
                 let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
 
                 do {
-                    if FileManager.default.fileExists(atPath: destinationURL.path) {
+                    let isSamePath = sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path
+
+                    if !isSamePath, FileManager.default.fileExists(atPath: destinationURL.path) {
                         try FileManager.default.removeItem(at: destinationURL)
                     }
-                    try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                    if !isSamePath {
+                        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                    }
                     imported += 1
+                    importedTracks.append(
+                        LocalAudioTrack(
+                            id: destinationURL,
+                            url: destinationURL,
+                            fileName: destinationURL.lastPathComponent,
+                            displayName: destinationURL.deletingPathExtension().lastPathComponent,
+                            duration: 180
+                        )
+                    )
                 } catch {
                     failed += 1
                 }
             }
 
             let result = ImportResult(importedCount: imported, skippedCount: skipped, failedCount: failed)
-            let tracks = Self.loadDeviceTracks(in: destinationFolder)
 
             Task { @MainActor [weak self] in
-                self?.deviceTracks = tracks
+                guard let self else {
+                    completion(result)
+                    return
+                }
+                var mergedByPath = Dictionary(uniqueKeysWithValues: self.importedTracks.map { ($0.url.path, $0) })
+                for track in importedTracks {
+                    mergedByPath[track.url.path] = track
+                }
+                self.importedTracks = mergedByPath.values.sorted {
+                    $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+                }
                 completion(result)
             }
         }
@@ -489,7 +498,7 @@ final class MusicLibraryViewModel: ObservableObject {
         )
     }
 
-    func songForDeviceTrack(_ track: LocalAudioTrack) -> Song {
+    func songForImportedTrack(_ track: LocalAudioTrack) -> Song {
         Song(
             id: stableSongID(forLocalPath: track.url.path),
             titleEN: track.displayName,
@@ -504,18 +513,10 @@ final class MusicLibraryViewModel: ObservableObject {
         )
     }
 
-    private func suggestedQueue(for song: Song) -> [Song] {
-        libraryUseCases.suggestedQueue(
-            for: song,
-            songs: songs,
-            deviceTracks: deviceTracks,
-            trackToSong: songForDeviceTrack
-        )
-    }
-
     private func loadAndPlay(song: Song, autoPlay: Bool = true) {
         lastPersistedSnapshotSecond = -1
         let url = audioURL(for: song)
+        if url == nil { return }
         playbackController.load(song: song, audioURL: url, autoPlay: autoPlay, playbackRate: playbackSpeed)
     }
 
@@ -557,31 +558,18 @@ final class MusicLibraryViewModel: ObservableObject {
             .appendingPathComponent(Storage.musicFolderName, isDirectory: true)
     }
 
-    func musicStorageURL() -> URL? {
-        musicStorageFolderURL()
-    }
-
     private func musicFileURL(fileName: String) -> URL? {
         musicStorageFolderURL()?
             .appendingPathComponent(fileName)
     }
 
     private func ensureMusicStorageFolderExists() {
-        guard let folderURL = musicStorageFolderURL() else {
-            musicStorageFolderPath = "-"
-            musicStorageFolderStatus = localized("storage.status.unavailable")
-            return
-        }
-
-        musicStorageFolderPath = folderURL.path
+        guard let folderURL = musicStorageFolderURL() else { return }
 
         var isDirectory: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: folderURL.path, isDirectory: &isDirectory)
 
-        if exists, isDirectory.boolValue {
-            musicStorageFolderStatus = localized("storage.status.ready")
-            return
-        }
+        if exists, isDirectory.boolValue { return }
 
         do {
             if exists && !isDirectory.boolValue {
@@ -593,45 +581,49 @@ final class MusicLibraryViewModel: ObservableObject {
                 withIntermediateDirectories: true,
                 attributes: nil
             )
-            musicStorageFolderStatus = localized("storage.status.created")
         } catch {
-            musicStorageFolderStatus = "\(localized("storage.status.failed")): \(error.localizedDescription)"
+            // Ignore storage setup errors here; import flow reports failures per file.
         }
     }
 
-    nonisolated private static func loadDeviceTracks(in root: URL) -> [LocalAudioTrack] {
-        let allowedExtensions = Set(["mp3", "m4a", "wav", "aac"])
-        let files = allAudioFiles(in: root, allowedExtensions: allowedExtensions)
+    private func restoreImportedTracks() {
+        let storageFolder = musicStorageFolderURL()
+        let restored = settingsStore.loadImportedTracks()
+            .compactMap { snapshot -> LocalAudioTrack? in
+                let preferredURL = storageFolder?.appendingPathComponent(snapshot.fileName)
+                let resolvedURL: URL?
 
-        return files
-            .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-            .map { url in
-                LocalAudioTrack(
-                    id: url,
-                    url: url,
-                    fileName: url.lastPathComponent,
-                    displayName: url.deletingPathExtension().lastPathComponent,
-                    duration: 180
+                if let preferredURL, FileManager.default.fileExists(atPath: preferredURL.path) {
+                    resolvedURL = preferredURL
+                } else {
+                    let legacyURL = URL(fileURLWithPath: snapshot.filePath)
+                    resolvedURL = FileManager.default.fileExists(atPath: legacyURL.path) ? legacyURL : nil
+                }
+
+                guard let resolvedURL else { return nil }
+                return LocalAudioTrack(
+                    id: resolvedURL,
+                    url: resolvedURL,
+                    fileName: snapshot.fileName,
+                    displayName: snapshot.displayName,
+                    duration: snapshot.duration
                 )
             }
+        importedTracks = restored.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
     }
 
-    nonisolated private static func allAudioFiles(in root: URL, allowedExtensions: Set<String>) -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
+    private func persistImportedTracks() {
+        let snapshots = importedTracks.map {
+            ImportedTrackSnapshot(
+                filePath: $0.url.path,
+                fileName: $0.fileName,
+                displayName: $0.displayName,
+                duration: $0.duration
+            )
         }
-
-        var result: [URL] = []
-        for case let url as URL in enumerator {
-            let ext = url.pathExtension.lowercased()
-            guard allowedExtensions.contains(ext) else { continue }
-            result.append(url)
-        }
-        return result
+        settingsStore.saveImportedTracks(snapshots)
     }
 
     private func stableSongID(forLocalPath path: String) -> UUID {
@@ -640,14 +632,23 @@ final class MusicLibraryViewModel: ObservableObject {
         bytes[6] = (bytes[6] & 0x0F) | 0x40
         bytes[8] = (bytes[8] & 0x3F) | 0x80
 
-        let uuid = uuid_t(bytes[0], bytes[1], bytes[2], bytes[3],
-                          bytes[4], bytes[5], bytes[6], bytes[7],
-                          bytes[8], bytes[9], bytes[10], bytes[11],
-                          bytes[12], bytes[13], bytes[14], bytes[15])
+        let uuid = uuid_t(
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        )
         return UUID(uuid: uuid)
     }
 
     private func bindSettingsStore() {
+        settingsStore.$language
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+
         settingsStore.$shuffleEnabled
             .removeDuplicates()
             .sink { [weak self] shuffleEnabled in
@@ -731,8 +732,12 @@ final class MusicLibraryViewModel: ObservableObject {
         guard let snapshot = snapshotStore.load() else { return }
         guard let restoredSong = resolveSong(for: snapshot) else { return }
 
-        let restoredQueue = suggestedQueue(for: restoredSong)
+        let restoredQueue = libraryUseCases.suggestedQueue(for: restoredSong, songs: songs, importedSongs: importedSongs)
         let selectedSong = queueStore.setQueue(current: restoredSong, in: restoredQueue, isSameTrack: isSameTrack)
+        guard audioURL(for: selectedSong) != nil else {
+            snapshotStore.clear()
+            return
+        }
 
         activeSong = selectedSong
         currentSongID = selectedSong.id
@@ -750,34 +755,20 @@ final class MusicLibraryViewModel: ObservableObject {
     }
 
     private func resolveSong(for snapshot: PlaybackSnapshot) -> Song? {
-        if let localPath = snapshot.localFilePath {
-            if let track = deviceTracks.first(where: { $0.url.path == localPath }) {
-                return songForDeviceTrack(track)
-            }
-
-            if FileManager.default.fileExists(atPath: localPath) {
-                let localURL = URL(fileURLWithPath: localPath)
-                let duration = AVURLAsset(url: localURL).duration.seconds
-                let track = LocalAudioTrack(
-                    id: localURL,
-                    url: localURL,
-                    fileName: localURL.lastPathComponent,
-                    displayName: localURL.deletingPathExtension().lastPathComponent,
-                    duration: duration.isFinite && duration > 0 ? duration : 180
-                )
-                return songForDeviceTrack(track)
-            }
+        if let localPath = snapshot.localFilePath,
+           let track = importedTracks.first(where: { $0.url.path == localPath }) {
+            return songForImportedTrack(track)
         }
 
-        if let track = deviceTracks.first(where: { $0.fileName == snapshot.audioFileName }) {
-            return songForDeviceTrack(track)
+        if let track = importedTracks.first(where: { $0.fileName == snapshot.audioFileName }) {
+            return songForImportedTrack(track)
         }
 
         if let song = songs.first(where: { $0.audioFileName == snapshot.audioFileName && $0.titleEN == snapshot.titleEN }) {
             return song
         }
 
-        return songs.first(where: { $0.audioFileName == snapshot.audioFileName })
+        return nil
     }
 
     private func handleSongDidFinish() {

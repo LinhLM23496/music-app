@@ -59,26 +59,20 @@ struct HomeTabView: View {
                         }
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.green)
-
-                        Button(vm.localized("common.refresh")) {
-                            vm.refreshDeviceTracks()
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.green)
                     }
 
-                    if vm.deviceTracks.isEmpty {
+                    if vm.importedTracks.isEmpty {
                         Text(vm.localized("home.device.music.empty"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
                         VStack(spacing: 10) {
-                            ForEach(vm.deviceTracks) { track in
+                            ForEach(vm.importedTracks) { track in
                                 Button {
-                                    let deviceSong = vm.songForDeviceTrack(track)
-                                    vm.play(song: deviceSong)
-                                    vm.presentPlayer(for: deviceSong)
+                                    let importedSong = vm.songForImportedTrack(track)
+                                    vm.play(song: importedSong)
+                                    vm.presentPlayer(for: importedSong)
                                 } label: {
                                     HStack(spacing: 12) {
                                         AlbumArtworkView(symbol: "waveform", accent: .green, cornerRadius: 12)

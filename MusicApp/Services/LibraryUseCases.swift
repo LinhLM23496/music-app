@@ -27,18 +27,14 @@ struct LibraryUseCases {
     func suggestedQueue(
         for song: Song,
         songs: [Song],
-        deviceTracks: [LocalAudioTrack],
-        trackToSong: (LocalAudioTrack) -> Song
+        importedSongs: [Song]
     ) -> [Song] {
         if songs.contains(where: { $0.id == song.id }) {
             return songs
         }
 
-        if song.localFilePath != nil {
-            let deviceQueue = deviceTracks.map(trackToSong)
-            if !deviceQueue.isEmpty {
-                return deviceQueue
-            }
+        if song.localFilePath != nil, !importedSongs.isEmpty {
+            return importedSongs
         }
 
         return [song]

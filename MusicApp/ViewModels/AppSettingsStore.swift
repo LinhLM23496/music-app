@@ -35,6 +35,13 @@ struct PlaybackSnapshot: Codable {
     }
 }
 
+struct ImportedTrackSnapshot: Codable {
+    let filePath: String
+    let fileName: String
+    let displayName: String
+    let duration: Double
+}
+
 final class AppSettingsStore: ObservableObject {
     static let shared = AppSettingsStore()
 
@@ -84,6 +91,7 @@ final class AppSettingsStore: ObservableObject {
         static let repeatMode = "settings.repeat_mode"
         static let didRunInitialMusicScan = "settings.did_run_initial_music_scan"
         static let playbackSnapshot = "settings.playback_snapshot"
+        static let importedTracks = "settings.imported_tracks"
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -130,5 +138,23 @@ final class AppSettingsStore: ObservableObject {
             return nil
         }
         return snapshot
+    }
+
+    func saveImportedTracks(_ tracks: [ImportedTrackSnapshot]) {
+        if let data = try? JSONEncoder().encode(tracks) {
+            defaults.set(data, forKey: Keys.importedTracks)
+        } else {
+            defaults.removeObject(forKey: Keys.importedTracks)
+        }
+    }
+
+    func loadImportedTracks() -> [ImportedTrackSnapshot] {
+        guard
+            let data = defaults.data(forKey: Keys.importedTracks),
+            let tracks = try? JSONDecoder().decode([ImportedTrackSnapshot].self, from: data)
+        else {
+            return []
+        }
+        return tracks
     }
 }
