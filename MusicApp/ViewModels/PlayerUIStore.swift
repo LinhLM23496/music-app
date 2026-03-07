@@ -96,8 +96,8 @@ final class PlayerViewModel: ObservableObject {
 
         queueSongs = queueStore.queueSongs
         queueIndex = queueStore.queueIndex
-        activeSong = queueStore.currentSong
-        currentSongID = activeSong?.id
+        activeSong = nil
+        currentSongID = nil
         isMiniPlayerHidden = playerUIStore.isMiniPlayerHidden
         playerSheetSong = playerUIStore.playerSheetSong
 
@@ -256,6 +256,9 @@ final class PlayerViewModel: ObservableObject {
     func handleSceneDidBecomeActive() {
         if !didPerformInitialActivationWork {
             didPerformInitialActivationWork = true
+            if hasPlaybackSession || playbackController.hasLoadedItem || isPlaying {
+                return
+            }
             restorePlaybackSnapshotIfAvailable()
         }
     }
@@ -589,7 +592,12 @@ final class PlayerViewModel: ObservableObject {
                 return .success
             }
 
-            guard let song = self.currentSong else { return .commandFailed }
+            if self.tryResumeFromSavedSnapshotForRemotePlay() {
+                return .success
+            }
+
+            let fallbackSong = self.randomPlayableSong()
+            guard let song = fallbackSong else { return .commandFailed }
             self.play(song: song)
             return .success
         }
@@ -649,5 +657,36 @@ final class PlayerViewModel: ObservableObject {
 
     private func clearNowPlayingInfo() {
         nowPlayingInfoCenter.nowPlayingInfo = nil
+    }
+
+    private func tryResumeFromSavedSnapshotForRemotePlay() -> Bool {
+        guard let snapshot = snapshotStore.load() else { return false }
+        guard let savedSong = resolveSong(for: snapshot) else { return false }
+        guard audioURL(for: savedSong) != nil else { return false }
+
+        let restoredQueue = libraryUseCases.suggestedQueue(for: savedSong, songs: librarySongs, importedSongs: importedSongs)
+        let selectedSong = queueStore.setQueue(current: savedSong, in: restoredQueue, isSameTrack: isSameTrack)
+
+        activeSong = selectedSong
+        currentSongID = selectedSong.id
+        hasPlaybackSession = true
+        isMiniPlayerHidden = false
+        loadAndPlay(song: selectedSong, autoPlay: true)
+
+        let duration = max(selectedSong.duration, 1)
+        let clampedPosition = min(max(snapshot.positionSeconds, 0), duration)
+        if clampedPosition > 0 {
+            playbackController.seek(to: clampedPosition)
+            persistPlaybackSnapshotForCurrentTrack(position: clampedPosition)
+        } else {
+            persistPlaybackSnapshotForCurrentTrack(position: 0)
+        }
+        refreshNowPlayingInfo()
+        return true
+    }
+
+    private func randomPlayableSong() -> Song? {
+        let mergedSongs = importedSongs + librarySongs
+        return mergedSongs.shuffled().first(where: { audioURL(for: $0) != nil })
     }
 }
