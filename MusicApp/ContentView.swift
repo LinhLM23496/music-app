@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore: AppSettingsStore
-    @StateObject private var vm: MusicLibraryViewModel
+    @StateObject private var localizationViewModel: LocalizationViewModel
     @StateObject private var importViewModel: ImportViewModel
     @StateObject private var playlistViewModel: PlaylistViewModel
     @StateObject private var authViewModel: AuthViewModel
@@ -13,22 +13,21 @@ struct ContentView: View {
     init() {
         let container = AppContainer.shared
         let settings = AppSettingsStore.shared
+        let localizationViewModel = LocalizationViewModel(
+            settingsStore: settings,
+            service: BundleLocalizationService()
+        )
         let libraryViewModel = container.makeLibraryViewModel()
         let importViewModel = ImportViewModel(settingsStore: settings)
         let playlistViewModel = container.makePlaylistViewModel()
         let playerDataSource = PlayerLibraryDataSource(
             libraryViewModel: libraryViewModel,
             importViewModel: importViewModel,
-            settingsStore: settings
-        )
-        let libraryVM = MusicLibraryViewModel(
             settingsStore: settings,
-            catalogSource: libraryViewModel,
-            importViewModel: importViewModel
+            localizationService: BundleLocalizationService()
         )
-
         _settingsStore = StateObject(wrappedValue: settings)
-        _vm = StateObject(wrappedValue: libraryVM)
+        _localizationViewModel = StateObject(wrappedValue: localizationViewModel)
         _importViewModel = StateObject(wrappedValue: importViewModel)
         _playlistViewModel = StateObject(wrappedValue: playlistViewModel)
         _authViewModel = StateObject(wrappedValue: container.makeAuthViewModel())
@@ -40,17 +39,17 @@ struct ContentView: View {
         TabView {
             HomeTabView()
                 .tabItem {
-                    Label(vm.localized("tab.home"), systemImage: "house.fill")
+                    Label(localizationViewModel.t("tab.home"), systemImage: "house.fill")
                 }
 
             PlaylistTabView()
                 .tabItem {
-                    Label(vm.localized("tab.playlist"), systemImage: "music.note.list")
+                    Label(localizationViewModel.t("tab.playlist"), systemImage: "music.note.list")
                 }
 
             InfoTabView()
                 .tabItem {
-                    Label(vm.localized("tab.info"), systemImage: "person.crop.circle")
+                    Label(localizationViewModel.t("tab.info"), systemImage: "person.crop.circle")
                 }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -72,7 +71,7 @@ struct ContentView: View {
         }
         .tint(.green)
         .preferredColorScheme(.dark)
-        .environmentObject(vm)
+        .environmentObject(localizationViewModel)
         .environmentObject(importViewModel)
         .environmentObject(playlistViewModel)
         .environmentObject(settingsStore)

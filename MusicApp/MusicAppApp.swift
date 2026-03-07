@@ -13,15 +13,18 @@ final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
     private let libraryViewModel: LibraryViewModel
     private let importViewModel: ImportViewModel
     private let settingsStore: AppSettingsStore
+    private let localizationService: LocalizationProviding
 
     init(
         libraryViewModel: LibraryViewModel,
         importViewModel: ImportViewModel,
-        settingsStore: AppSettingsStore
+        settingsStore: AppSettingsStore,
+        localizationService: LocalizationProviding
     ) {
         self.libraryViewModel = libraryViewModel
         self.importViewModel = importViewModel
         self.settingsStore = settingsStore
+        self.localizationService = localizationService
     }
 
     var songs: [Song] {
@@ -41,7 +44,7 @@ final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
     }
 
     func localized(_ key: String) -> String {
-        Localizer.string(key, language: settingsStore.language)
+        localizationService.string(key, language: settingsStore.language)
     }
 }
 

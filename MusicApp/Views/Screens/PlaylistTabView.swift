@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlaylistTabView: View {
-    @EnvironmentObject private var vm: MusicLibraryViewModel
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
 
@@ -23,37 +23,37 @@ struct PlaylistTabView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle(vm.localized("playlist.title"))
+            .navigationTitle(localizationViewModel.t("playlist.title"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingCreatePlaylist = true
                     } label: {
-                        Label(vm.localized("playlist.new"), systemImage: "plus")
+                        Label(localizationViewModel.t("playlist.new"), systemImage: "plus")
                     }
                 }
             }
         }
-        .alert(vm.localized("playlist.create"), isPresented: $showingCreatePlaylist) {
-            TextField(vm.localized("playlist.name"), text: $newPlaylistName)
-            Button(vm.localized("playlist.cancel"), role: .cancel) {
+        .alert(localizationViewModel.t("playlist.create"), isPresented: $showingCreatePlaylist) {
+            TextField(localizationViewModel.t("playlist.name"), text: $newPlaylistName)
+            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
                 newPlaylistName = ""
             }
-            Button(vm.localized("playlist.create.button")) {
+            Button(localizationViewModel.t("playlist.create.button")) {
                 playlistViewModel.createPlaylist(name: newPlaylistName)
                 newPlaylistName = ""
             }
         }
         .sheet(item: $selectedPlaylistForAdd) { playlist in
             AddSongToPlaylistView(playlist: playlist)
-                .environmentObject(vm)
+                .environmentObject(localizationViewModel)
                 .environmentObject(playlistViewModel)
                 .environmentObject(libraryViewModel)
         }
     }
 
     private func playlistRow(_ playlist: Playlist) -> some View {
-        let playlistSongs = playlistViewModel.songs(in: playlist, allSongs: vm.songs)
+        let playlistSongs = playlistViewModel.songs(in: playlist, allSongs: libraryViewModel.tracks)
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -61,16 +61,16 @@ struct PlaylistTabView: View {
                     .frame(width: 64, height: 64)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(vm.localizedPlaylistName(playlist))
+                    Text(localizationViewModel.playlistName(playlist))
                         .font(.headline)
-                    Text(vm.songsCountText(playlistSongs.count))
+                    Text(localizationViewModel.songsCountText(playlistSongs.count))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Button(vm.localized("playlist.add.song")) {
+                Button(localizationViewModel.t("playlist.add.song")) {
                     selectedPlaylistForAdd = playlist
                 }
                 .buttonStyle(.borderedProminent)
@@ -78,12 +78,12 @@ struct PlaylistTabView: View {
             }
 
             if playlistSongs.isEmpty {
-                Text(vm.localized("playlist.no.songs"))
+                Text(localizationViewModel.t("playlist.no.songs"))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(playlistSongs.prefix(3)) { song in
-                    SongRowView(song: song, title: vm.localizedSongTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
+                    SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
                 }
             }
         }
@@ -94,18 +94,18 @@ struct PlaylistTabView: View {
 
 struct AddSongToPlaylistView: View {
     let playlist: Playlist
-    @EnvironmentObject private var vm: MusicLibraryViewModel
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            List(vm.songs) { song in
+            List(libraryViewModel.tracks) { song in
                 Button {
                     playlistViewModel.addSong(song, to: playlist.id)
                 } label: {
-                    SongRowView(song: song, title: vm.localizedSongTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
+                    SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(Color.clear)
@@ -114,10 +114,10 @@ struct AddSongToPlaylistView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle(vm.localized("playlist.add.songs"))
+            .navigationTitle(localizationViewModel.t("playlist.add.songs"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(vm.localized("common.done")) {
+                    Button(localizationViewModel.t("common.done")) {
                         dismiss()
                     }
                 }
