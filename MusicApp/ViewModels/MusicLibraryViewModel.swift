@@ -15,25 +15,20 @@ final class MusicLibraryViewModel: ObservableObject {
         static let musicFolderName = "MusicFiles"
     }
 
-    var songs: [Song] {
-        get { libraryStore.songs }
-        set { libraryStore.songs = newValue }
+    @Published var songs: [Song] {
+        didSet { libraryStore.songs = songs }
     }
-    var deviceTracks: [LocalAudioTrack] {
-        get { deviceMediaStore.deviceTracks }
-        set { deviceMediaStore.deviceTracks = newValue }
+    @Published var deviceTracks: [LocalAudioTrack] {
+        didSet { deviceMediaStore.deviceTracks = deviceTracks }
     }
-    var featuredSongIDs: [UUID] {
-        get { libraryStore.featuredSongIDs }
-        set { libraryStore.featuredSongIDs = newValue }
+    @Published var featuredSongIDs: [UUID] {
+        didSet { libraryStore.featuredSongIDs = featuredSongIDs }
     }
-    var favoriteSongIDs: Set<UUID> {
-        get { libraryStore.favoriteSongIDs }
-        set { libraryStore.favoriteSongIDs = newValue }
+    @Published var favoriteSongIDs: Set<UUID> {
+        didSet { libraryStore.favoriteSongIDs = favoriteSongIDs }
     }
-    var playlists: [Playlist] {
-        get { playlistStore.playlists }
-        set { playlistStore.playlists = newValue }
+    @Published var playlists: [Playlist] {
+        didSet { playlistStore.playlists = playlists }
     }
     var language: AppLanguage {
         get { settingsStore.language }
@@ -47,7 +42,7 @@ final class MusicLibraryViewModel: ObservableObject {
         settingsStore.$language.eraseToAnyPublisher()
     }
     var favoriteSongIDsPublisher: AnyPublisher<Set<UUID>, Never> {
-        libraryStore.$favoriteSongIDs.eraseToAnyPublisher()
+        $favoriteSongIDs.eraseToAnyPublisher()
     }
 
     @Published var currentSongID: UUID?
@@ -71,25 +66,23 @@ final class MusicLibraryViewModel: ObservableObject {
     @Published var queueIndex: Int
     @Published var playbackSpeed: Double = 1.0
     @Published var hasPlaybackSession = false
-    var isMiniPlayerHidden: Bool {
-        get { playerUIStore.isMiniPlayerHidden }
-        set { playerUIStore.isMiniPlayerHidden = newValue }
+    @Published var isMiniPlayerHidden: Bool {
+        didSet { playerUIStore.isMiniPlayerHidden = isMiniPlayerHidden }
     }
-    var playerSheetSong: Song? {
-        get { playerUIStore.playerSheetSong }
-        set { playerUIStore.playerSheetSong = newValue }
+    @Published var playerSheetSong: Song? {
+        didSet { playerUIStore.playerSheetSong = playerSheetSong }
     }
     @Published var sleepTimerRemaining: Double?
-    var musicStorageFolderPath: String {
-        get { deviceMediaStore.musicStorageFolderPath }
-        set { deviceMediaStore.musicStorageFolderPath = newValue }
+    @Published var musicStorageFolderPath: String {
+        didSet { deviceMediaStore.musicStorageFolderPath = musicStorageFolderPath }
     }
-    var musicStorageFolderStatus: String {
-        get { deviceMediaStore.musicStorageFolderStatus }
-        set { deviceMediaStore.musicStorageFolderStatus = newValue }
+    @Published var musicStorageFolderStatus: String {
+        didSet { deviceMediaStore.musicStorageFolderStatus = musicStorageFolderStatus }
     }
 
-    var user: AppUser { userInfoStore.user }
+    @Published var user: AppUser {
+        didSet { userInfoStore.user = user }
+    }
 
     private var player: AVPlayer?
     private var timeObserverToken: Any?
@@ -133,15 +126,23 @@ final class MusicLibraryViewModel: ObservableObject {
             Playlist(id: UUID(), nameEN: "Weekend Chill", nameVI: "Thư Giãn Cuối Tuần", coverSymbol: "beach.umbrella.fill", songIDs: [demoSongs[4].id])
         ])
 
+        songs = libraryStore.songs
+        featuredSongIDs = libraryStore.featuredSongIDs
+        favoriteSongIDs = libraryStore.favoriteSongIDs
+        playlists = playlistStore.playlists
+        deviceTracks = deviceMediaStore.deviceTracks
+        isMiniPlayerHidden = playerUIStore.isMiniPlayerHidden
+        playerSheetSong = playerUIStore.playerSheetSong
+        musicStorageFolderPath = deviceMediaStore.musicStorageFolderPath
+        musicStorageFolderStatus = deviceMediaStore.musicStorageFolderStatus
+        user = userInfoStore.user
+
         queueSongs = demoSongs
         queueIndex = 0
         activeSong = demoSongs.first
         currentSongID = demoSongs.first?.id
 
-        bridgeStoreChanges()
-
         ensureMusicStorageFolderExists()
-        settingsStore.didRunInitialMusicScan = true
         bindSettingsStore()
         bindSleepTimerService()
     }
@@ -789,53 +790,7 @@ final class MusicLibraryViewModel: ObservableObject {
         return UUID(uuid: uuid)
     }
 
-    private func bridgeStoreChanges() {
-        libraryStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        playlistStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        deviceMediaStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        playerUIStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        userInfoStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-
-        settingsStore.objectWillChange
-            .sink { [weak self] _ in
-                self?.objectWillChange.send()
-            }
-            .store(in: &cancellables)
-    }
-
     private func bindSettingsStore() {
-        settingsStore.$language
-            .removeDuplicates()
-            .sink { [weak self] language in
-                guard let self, self.language != language else { return }
-                self.language = language
-            }
-            .store(in: &cancellables)
-
         settingsStore.$shuffleEnabled
             .removeDuplicates()
             .sink { [weak self] shuffleEnabled in

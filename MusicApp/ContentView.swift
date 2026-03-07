@@ -45,14 +45,20 @@ struct ContentView: View {
         .environmentObject(settingsStore)
         .task {
             if scenePhase == .active {
-                vm.handleSceneDidBecomeActive()
+                DispatchQueue.main.async {
+                    vm.handleSceneDidBecomeActive()
+                }
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                vm.handleSceneDidBecomeActive()
+                DispatchQueue.main.async {
+                    vm.handleSceneDidBecomeActive()
+                }
             } else if newPhase == .inactive || newPhase == .background {
-                vm.savePlaybackSnapshotNow()
+                DispatchQueue.main.async {
+                    vm.savePlaybackSnapshotNow()
+                }
             }
         }
         .sheet(item: $vm.playerSheetSong) { song in
