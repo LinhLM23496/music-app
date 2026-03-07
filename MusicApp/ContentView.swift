@@ -14,10 +14,10 @@ struct ContentView: View {
         let app = MusicLibraryViewModel(settingsStore: .shared)
         _settingsStore = StateObject(wrappedValue: settings)
         _appVM = StateObject(wrappedValue: app)
-        _homeVM = StateObject(wrappedValue: HomeViewModel(appVM: app))
-        _playlistVM = StateObject(wrappedValue: PlaylistViewModel(appVM: app))
-        _infoVM = StateObject(wrappedValue: InfoViewModel(appVM: app, settingsStore: settings))
-        _playerVM = StateObject(wrappedValue: PlayerViewModel(appVM: app))
+        _homeVM = StateObject(wrappedValue: HomeViewModel(source: app))
+        _playlistVM = StateObject(wrappedValue: PlaylistViewModel(source: app))
+        _infoVM = StateObject(wrappedValue: InfoViewModel(source: app, settingsStore: settings))
+        _playerVM = StateObject(wrappedValue: PlayerViewModel(source: app))
     }
 
     var body: some View {

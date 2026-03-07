@@ -3,15 +3,15 @@ import Combine
 
 @MainActor
 final class InfoViewModel: ObservableObject {
-    let appVM: MusicLibraryViewModel
+    let source: any InfoFeatureControlling
     let settingsStore: AppSettingsStore
     private var cancellables = Set<AnyCancellable>()
 
-    init(appVM: MusicLibraryViewModel, settingsStore: AppSettingsStore) {
-        self.appVM = appVM
+    init(source: any InfoFeatureControlling, settingsStore: AppSettingsStore) {
+        self.source = source
         self.settingsStore = settingsStore
 
-        appVM.objectWillChange
+        source.changePublisher
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
@@ -24,11 +24,11 @@ final class InfoViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    var user: AppUser { appVM.user }
-    var musicStorageFolderStatus: String { appVM.musicStorageFolderStatus }
-    var musicStorageFolderPath: String { appVM.musicStorageFolderPath }
+    var user: AppUser { source.user }
+    var musicStorageFolderStatus: String { source.musicStorageFolderStatus }
+    var musicStorageFolderPath: String { source.musicStorageFolderPath }
 
-    func localized(_ key: String) -> String { appVM.localized(key) }
-    func refreshDeviceTracks() { appVM.refreshDeviceTracks() }
-    func musicStorageURL() -> URL? { appVM.musicStorageURL() }
+    func localized(_ key: String) -> String { source.localized(key) }
+    func refreshDeviceTracks() { source.refreshDeviceTracks() }
+    func musicStorageURL() -> URL? { source.musicStorageURL() }
 }

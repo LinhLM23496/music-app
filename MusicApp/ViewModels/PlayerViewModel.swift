@@ -3,34 +3,34 @@ import Combine
 
 @MainActor
 final class PlayerViewModel: ObservableObject {
-    let appVM: MusicLibraryViewModel
+    let source: any PlayerFeatureControlling
     private var cancellables = Set<AnyCancellable>()
 
-    init(appVM: MusicLibraryViewModel) {
-        self.appVM = appVM
-        appVM.objectWillChange
+    init(source: any PlayerFeatureControlling) {
+        self.source = source
+        source.changePublisher
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
     }
 
-    var currentSong: Song? { appVM.currentSong }
-    var shouldShowMiniPlayer: Bool { appVM.shouldShowMiniPlayer }
-    var isPlaying: Bool { appVM.isPlaying }
-    var playbackProgress: PlaybackProgressState { appVM.playbackProgress }
+    var currentSong: Song? { source.currentSong }
+    var shouldShowMiniPlayer: Bool { source.shouldShowMiniPlayer }
+    var isPlaying: Bool { source.isPlaying }
+    var playbackProgress: PlaybackProgressState { source.playbackProgress }
 
     var playerSheetSong: Song? {
-        get { appVM.playerSheetSong }
-        set { appVM.playerSheetSong = newValue }
+        get { source.playerSheetSong }
+        set { source.playerSheetSong = newValue }
     }
 
-    func localized(_ key: String) -> String { appVM.localized(key) }
-    func localizedSongTitle(_ song: Song) -> String { appVM.localizedSongTitle(song) }
+    func localized(_ key: String) -> String { source.localized(key) }
+    func localizedSongTitle(_ song: Song) -> String { source.localizedSongTitle(song) }
 
-    func togglePlayPause() { appVM.togglePlayPause() }
-    func nextSong() { appVM.nextSong() }
-    func hideMiniPlayer() { appVM.hideMiniPlayer() }
-    func stopAndResetPlayback() { appVM.stopAndResetPlayback() }
-    func presentPlayer(for song: Song) { appVM.presentPlayer(for: song) }
+    func togglePlayPause() { source.togglePlayPause() }
+    func nextSong() { source.nextSong() }
+    func hideMiniPlayer() { source.hideMiniPlayer() }
+    func stopAndResetPlayback() { source.stopAndResetPlayback() }
+    func presentPlayer(for song: Song) { source.presentPlayer(for: song) }
 }

@@ -2,7 +2,12 @@ import Foundation
 import Combine
 
 @MainActor
-protocol HomeFeatureControlling: AnyObject, ObservableObject {
+protocol FeatureControlling: AnyObject {
+    var changePublisher: AnyPublisher<Void, Never> { get }
+}
+
+@MainActor
+protocol HomeFeatureControlling: FeatureControlling {
     var featuredSongs: [Song] { get }
     var favoriteSongs: [Song] { get }
     var deviceTracks: [LocalAudioTrack] { get }
@@ -17,7 +22,7 @@ protocol HomeFeatureControlling: AnyObject, ObservableObject {
 }
 
 @MainActor
-protocol PlaylistFeatureControlling: AnyObject, ObservableObject {
+protocol PlaylistFeatureControlling: FeatureControlling {
     var playlists: [Playlist] { get }
     var songs: [Song] { get }
     var favoriteSongIDs: Set<UUID> { get }
@@ -32,7 +37,7 @@ protocol PlaylistFeatureControlling: AnyObject, ObservableObject {
 }
 
 @MainActor
-protocol InfoFeatureControlling: AnyObject, ObservableObject {
+protocol InfoFeatureControlling: FeatureControlling {
     var user: AppUser { get }
     var musicStorageFolderStatus: String { get }
     var musicStorageFolderPath: String { get }
@@ -42,7 +47,7 @@ protocol InfoFeatureControlling: AnyObject, ObservableObject {
 }
 
 @MainActor
-protocol PlayerFeatureControlling: AnyObject, ObservableObject {
+protocol PlayerFeatureControlling: FeatureControlling {
     var currentSong: Song? { get }
     var shouldShowMiniPlayer: Bool { get }
     var isPlaying: Bool { get }

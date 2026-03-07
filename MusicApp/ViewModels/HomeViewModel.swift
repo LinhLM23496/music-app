@@ -3,32 +3,32 @@ import Combine
 
 @MainActor
 final class HomeViewModel: ObservableObject {
-    let appVM: MusicLibraryViewModel
+    let source: any HomeFeatureControlling
     private var cancellables = Set<AnyCancellable>()
 
-    init(appVM: MusicLibraryViewModel) {
-        self.appVM = appVM
-        appVM.objectWillChange
+    init(source: any HomeFeatureControlling) {
+        self.source = source
+        source.changePublisher
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
     }
 
-    var featuredSongs: [Song] { appVM.featuredSongs }
-    var favoriteSongs: [Song] { appVM.favoriteSongs }
-    var deviceTracks: [LocalAudioTrack] { appVM.deviceTracks }
+    var featuredSongs: [Song] { source.featuredSongs }
+    var favoriteSongs: [Song] { source.favoriteSongs }
+    var deviceTracks: [LocalAudioTrack] { source.deviceTracks }
 
-    func localized(_ key: String) -> String { appVM.localized(key) }
-    func localizedSongTitle(_ song: Song) -> String { appVM.localizedSongTitle(song) }
-    func play(song: Song) { appVM.play(song: song) }
-    func presentPlayer(for song: Song) { appVM.presentPlayer(for: song) }
-    func refreshDeviceTracks() { appVM.refreshDeviceTracks() }
-    func songForDeviceTrack(_ track: LocalAudioTrack) -> Song { appVM.songForDeviceTrack(track) }
+    func localized(_ key: String) -> String { source.localized(key) }
+    func localizedSongTitle(_ song: Song) -> String { source.localizedSongTitle(song) }
+    func play(song: Song) { source.play(song: song) }
+    func presentPlayer(for song: Song) { source.presentPlayer(for: song) }
+    func refreshDeviceTracks() { source.refreshDeviceTracks() }
+    func songForDeviceTrack(_ track: LocalAudioTrack) -> Song { source.songForDeviceTrack(track) }
     func importAudioFiles(from urls: [URL], completion: @escaping (MusicLibraryViewModel.ImportResult) -> Void) {
-        appVM.importAudioFiles(from: urls, completion: completion)
+        source.importAudioFiles(from: urls, completion: completion)
     }
     func importSummaryText(_ result: MusicLibraryViewModel.ImportResult) -> String {
-        appVM.importSummaryText(result)
+        source.importSummaryText(result)
     }
 }

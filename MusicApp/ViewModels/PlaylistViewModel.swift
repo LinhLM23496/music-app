@@ -3,28 +3,28 @@ import Combine
 
 @MainActor
 final class PlaylistViewModel: ObservableObject {
-    let appVM: MusicLibraryViewModel
+    let source: any PlaylistFeatureControlling
     private var cancellables = Set<AnyCancellable>()
 
-    init(appVM: MusicLibraryViewModel) {
-        self.appVM = appVM
-        appVM.objectWillChange
+    init(source: any PlaylistFeatureControlling) {
+        self.source = source
+        source.changePublisher
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
             }
             .store(in: &cancellables)
     }
 
-    var playlists: [Playlist] { appVM.playlists }
-    var songs: [Song] { appVM.songs }
-    var favoriteSongIDs: Set<UUID> { appVM.favoriteSongIDs }
+    var playlists: [Playlist] { source.playlists }
+    var songs: [Song] { source.songs }
+    var favoriteSongIDs: Set<UUID> { source.favoriteSongIDs }
 
-    func localized(_ key: String) -> String { appVM.localized(key) }
-    func localizedSongTitle(_ song: Song) -> String { appVM.localizedSongTitle(song) }
-    func localizedPlaylistName(_ playlist: Playlist) -> String { appVM.localizedPlaylistName(playlist) }
-    func songsCountText(_ count: Int) -> String { appVM.songsCountText(count) }
-    func songs(in playlist: Playlist) -> [Song] { appVM.songs(in: playlist) }
-    func createPlaylist(name: String) { appVM.createPlaylist(name: name) }
-    func deletePlaylist(at offsets: IndexSet) { appVM.deletePlaylist(at: offsets) }
-    func addSong(_ song: Song, to playlistID: UUID) { appVM.addSong(song, to: playlistID) }
+    func localized(_ key: String) -> String { source.localized(key) }
+    func localizedSongTitle(_ song: Song) -> String { source.localizedSongTitle(song) }
+    func localizedPlaylistName(_ playlist: Playlist) -> String { source.localizedPlaylistName(playlist) }
+    func songsCountText(_ count: Int) -> String { source.songsCountText(count) }
+    func songs(in playlist: Playlist) -> [Song] { source.songs(in: playlist) }
+    func createPlaylist(name: String) { source.createPlaylist(name: name) }
+    func deletePlaylist(at offsets: IndexSet) { source.deletePlaylist(at: offsets) }
+    func addSong(_ song: Song, to playlistID: UUID) { source.addSong(song, to: playlistID) }
 }

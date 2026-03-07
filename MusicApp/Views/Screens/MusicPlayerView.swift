@@ -11,7 +11,7 @@ struct MusicPlayerView: View {
     init(song: Song, vm: PlayerViewModel) {
         self.song = song
         self.vm = vm
-        _uiState = StateObject(wrappedValue: MusicPlayerUIState(song: song, source: vm.appVM))
+        _uiState = StateObject(wrappedValue: MusicPlayerUIState(song: song, source: vm.source))
     }
 
     private func localized(_ key: String) -> String {
@@ -54,27 +54,27 @@ struct MusicPlayerView: View {
                     song: uiState.displaySong,
                     language: uiState.language,
                     isFavorite: uiState.favoriteSongIDs.contains(uiState.displaySong.id),
-                    onToggleFavorite: { vm.appVM.toggleFavorite(for: uiState.displaySong) }
+                    onToggleFavorite: { vm.source.toggleFavorite(for: uiState.displaySong) }
                 )
                 .padding(.horizontal, 24)
 
                 PlaybackProgressSection(
                     state: uiState.playbackProgress,
                     fallbackDuration: uiState.playbackProgress.duration > 0 ? uiState.playbackProgress.duration : uiState.displaySong.duration,
-                    onSeek: { vm.appVM.seek(to: $0) }
+                    onSeek: { vm.source.seek(to: $0) }
                 )
                 .padding(.horizontal, 24)
 
                 HStack(spacing: 26) {
                     Button {
-                        vm.appVM.isShuffleOn.toggle()
+                        vm.source.isShuffleOn.toggle()
                     } label: {
                         Image(systemName: "shuffle")
                             .foregroundStyle(uiState.isShuffleOn ? .green : .white)
                     }
 
                     Button {
-                        vm.appVM.previousSong()
+                        vm.source.previousSong()
                     } label: {
                         Image(systemName: "backward.fill")
                             .font(.title)
@@ -96,7 +96,7 @@ struct MusicPlayerView: View {
                     }
 
                     Button {
-                        vm.appVM.cycleRepeatMode()
+                        vm.source.cycleRepeatMode()
                     } label: {
                         Image(systemName: uiState.repeatMode.icon)
                             .foregroundStyle(uiState.repeatMode == .off ? .white : .green)
@@ -108,8 +108,8 @@ struct MusicPlayerView: View {
                     Menu {
                         ForEach([0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
                             Button {
-                                vm.appVM.setPlaybackSpeed(speed)
-                                vm.appVM.resumeLiveProgressUpdates()
+                                vm.source.setPlaybackSpeed(speed)
+                                vm.source.resumeLiveProgressUpdates()
                             } label: {
                                 if speed == uiState.playbackSpeed {
                                     Label(String(format: "%.2fx", speed), systemImage: "checkmark")
@@ -122,7 +122,7 @@ struct MusicPlayerView: View {
                         Label("\(localized("player.speed")): \(String(format: "%.2fx", uiState.playbackSpeed))", systemImage: "speedometer")
                     }
                     .simultaneousGesture(TapGesture().onEnded {
-                        vm.appVM.pauseLiveProgressUpdates(seconds: 2.0)
+                        vm.source.pauseLiveProgressUpdates(seconds: 2.0)
                     })
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -130,30 +130,30 @@ struct MusicPlayerView: View {
 
                     Menu {
                         Button(localized("player.sleep.off")) {
-                            vm.appVM.cancelSleepTimer()
-                            vm.appVM.resumeLiveProgressUpdates()
+                            vm.source.cancelSleepTimer()
+                            vm.source.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.5m")) {
-                            vm.appVM.setSleepTimer(minutes: 5)
-                            vm.appVM.resumeLiveProgressUpdates()
+                            vm.source.setSleepTimer(minutes: 5)
+                            vm.source.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.10m")) {
-                            vm.appVM.setSleepTimer(minutes: 10)
-                            vm.appVM.resumeLiveProgressUpdates()
+                            vm.source.setSleepTimer(minutes: 10)
+                            vm.source.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.15m")) {
-                            vm.appVM.setSleepTimer(minutes: 15)
-                            vm.appVM.resumeLiveProgressUpdates()
+                            vm.source.setSleepTimer(minutes: 15)
+                            vm.source.resumeLiveProgressUpdates()
                         }
                         Button(localized("player.sleep.30m")) {
-                            vm.appVM.setSleepTimer(minutes: 30)
-                            vm.appVM.resumeLiveProgressUpdates()
+                            vm.source.setSleepTimer(minutes: 30)
+                            vm.source.resumeLiveProgressUpdates()
                         }
                     } label: {
                         Label(localized("player.sleep.timer"), systemImage: "timer")
                     }
                     .simultaneousGesture(TapGesture().onEnded {
-                        vm.appVM.pauseLiveProgressUpdates(seconds: 2.0)
+                        vm.source.pauseLiveProgressUpdates(seconds: 2.0)
                     })
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -169,9 +169,9 @@ struct MusicPlayerView: View {
         }
         .onAppear {
             DispatchQueue.main.async {
-                uiState.bind(to: vm.appVM)
-                if !vm.appVM.isCurrentSong(song) {
-                    vm.appVM.play(song: song)
+                uiState.bind(to: vm.source)
+                if !vm.source.isCurrentSong(song) {
+                    vm.source.play(song: song)
                 }
             }
         }
@@ -185,7 +185,7 @@ struct MusicPlayerView: View {
         NavigationStack {
             List(Array(uiState.queueSongs.enumerated()), id: \.offset) { index, queueSong in
                 Button {
-                    vm.appVM.playFromQueue(index: index)
+                    vm.source.playFromQueue(index: index)
                 } label: {
                     HStack(spacing: 12) {
                         AlbumArtworkView(symbol: queueSong.coverSymbol, accent: queueSong.accent, cornerRadius: 10)
