@@ -43,9 +43,14 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .environmentObject(vm)
         .environmentObject(settingsStore)
+        .task {
+            if scenePhase == .active {
+                vm.handleSceneDidBecomeActive()
+            }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                vm.refreshDeviceTracks()
+                vm.handleSceneDidBecomeActive()
             } else if newPhase == .inactive || newPhase == .background {
                 vm.savePlaybackSnapshotNow()
             }

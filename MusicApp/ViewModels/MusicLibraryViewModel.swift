@@ -106,6 +106,7 @@ final class MusicLibraryViewModel: ObservableObject {
     private var activeSong: Song?
     private var pauseLiveUpdatesUntil: Date = .distantPast
     private var lastPersistedSnapshotSecond: Int = -1
+    private var didPerformInitialActivationWork = false
 
     init(settingsStore: AppSettingsStore) {
         self.settingsStore = settingsStore
@@ -140,11 +141,17 @@ final class MusicLibraryViewModel: ObservableObject {
         bridgeStoreChanges()
 
         ensureMusicStorageFolderExists()
-        refreshDeviceTracks()
         settingsStore.didRunInitialMusicScan = true
         bindSettingsStore()
         bindSleepTimerService()
-        restorePlaybackSnapshotIfAvailable()
+    }
+
+    func handleSceneDidBecomeActive() {
+        if !didPerformInitialActivationWork {
+            didPerformInitialActivationWork = true
+            restorePlaybackSnapshotIfAvailable()
+        }
+        refreshDeviceTracks()
     }
 
     var featuredSongs: [Song] {
@@ -741,13 +748,12 @@ final class MusicLibraryViewModel: ObservableObject {
         return files
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
             .map { url in
-                let duration = AVURLAsset(url: url).duration.seconds
                 return LocalAudioTrack(
                     id: url,
                     url: url,
                     fileName: url.lastPathComponent,
                     displayName: url.deletingPathExtension().lastPathComponent,
-                    duration: duration.isFinite && duration > 0 ? duration : 180
+                    duration: 180
                 )
             }
     }
