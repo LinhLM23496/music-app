@@ -2,13 +2,14 @@ import SwiftUI
 
 struct MusicPlayerView: View {
     let song: Song
-    let controller: MusicLibraryViewModel
+    let controller: PlayerViewModel
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @StateObject private var uiState: MusicPlayerUIState
     @State private var showQueueSheet = false
 
-    init(song: Song, controller: MusicLibraryViewModel) {
+    init(song: Song, controller: PlayerViewModel) {
         self.song = song
         self.controller = controller
         _uiState = StateObject(wrappedValue: MusicPlayerUIState(song: song, source: controller))
@@ -53,8 +54,8 @@ struct MusicPlayerView: View {
                 NowPlayingInfoView(
                     song: uiState.displaySong,
                     language: uiState.language,
-                    isFavorite: uiState.favoriteSongIDs.contains(uiState.displaySong.id),
-                    onToggleFavorite: { controller.toggleFavorite(for: uiState.displaySong) }
+                    isFavorite: libraryViewModel.favoriteIDs.contains(uiState.displaySong.id),
+                    onToggleFavorite: { libraryViewModel.toggleFavorite(songID: uiState.displaySong.id) }
                 )
                 .padding(.horizontal, 24)
 
@@ -67,7 +68,7 @@ struct MusicPlayerView: View {
 
                 HStack(spacing: 26) {
                     Button {
-                        controller.isShuffleOn.toggle()
+                        controller.toggleShuffle()
                     } label: {
                         Image(systemName: "shuffle")
                             .foregroundStyle(uiState.isShuffleOn ? .green : .white)

@@ -2,38 +2,68 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var settingsStore = AppSettingsStore.shared
-    @StateObject private var vm = MusicLibraryViewModel(settingsStore: .shared)
+    @StateObject private var settingsStore: AppSettingsStore
+    @StateObject private var localizationViewModel: LocalizationViewModel
+    @StateObject private var importViewModel: ImportViewModel
+    @StateObject private var playlistViewModel: PlaylistViewModel
+    @StateObject private var authViewModel: AuthViewModel
+    @StateObject private var libraryViewModel: LibraryViewModel
+    @StateObject private var playerViewModel: PlayerViewModel
+
+    init() {
+        let container = AppContainer.shared
+        let settings = AppSettingsStore.shared
+        let localizationViewModel = LocalizationViewModel(
+            settingsStore: settings,
+            service: BundleLocalizationService()
+        )
+        let libraryViewModel = container.makeLibraryViewModel()
+        let importViewModel = ImportViewModel(settingsStore: settings)
+        let playlistViewModel = container.makePlaylistViewModel()
+        let playerDataSource = PlayerLibraryDataSource(
+            libraryViewModel: libraryViewModel,
+            importViewModel: importViewModel,
+            settingsStore: settings,
+            localizationService: BundleLocalizationService()
+        )
+        _settingsStore = StateObject(wrappedValue: settings)
+        _localizationViewModel = StateObject(wrappedValue: localizationViewModel)
+        _importViewModel = StateObject(wrappedValue: importViewModel)
+        _playlistViewModel = StateObject(wrappedValue: playlistViewModel)
+        _authViewModel = StateObject(wrappedValue: container.makeAuthViewModel())
+        _libraryViewModel = StateObject(wrappedValue: libraryViewModel)
+        _playerViewModel = StateObject(wrappedValue: container.makePlayerViewModel(libraryDataSource: playerDataSource))
+    }
 
     var body: some View {
         TabView {
             HomeTabView()
                 .tabItem {
-                    Label(vm.localized("tab.home"), systemImage: "house.fill")
+                    Label(localizationViewModel.t("tab.home"), systemImage: "house.fill")
                 }
 
             PlaylistTabView()
                 .tabItem {
-                    Label(vm.localized("tab.playlist"), systemImage: "music.note.list")
+                    Label(localizationViewModel.t("tab.playlist"), systemImage: "music.note.list")
                 }
 
             InfoTabView()
                 .tabItem {
-                    Label(vm.localized("tab.info"), systemImage: "person.crop.circle")
+                    Label(localizationViewModel.t("tab.info"), systemImage: "person.crop.circle")
                 }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if vm.shouldShowMiniPlayer, let currentSong = vm.currentSong {
+            if playerViewModel.shouldShowMiniPlayer, let currentSong = playerViewModel.currentSong {
                 MiniPlayerBarView(
                     song: currentSong,
-                    title: vm.localizedSongTitle(currentSong),
-                    isPlaying: vm.isPlaying,
-                    playbackProgress: vm.playbackProgress,
-                    onTogglePlayPause: { vm.togglePlayPause() },
-                    onNext: { vm.nextSong() },
-                    onHide: { vm.hideMiniPlayer() },
-                    onStop: { vm.stopAndResetPlayback() },
-                    onOpen: { vm.presentPlayer(for: currentSong) }
+                    title: playerViewModel.localizedSongTitle(currentSong),
+                    isPlaying: playerViewModel.isPlaying,
+                    playbackProgress: playerViewModel.playbackProgress,
+                    onTogglePlayPause: { playerViewModel.togglePlayPause() },
+                    onNext: { playerViewModel.nextSong() },
+                    onHide: { playerViewModel.hideMiniPlayer() },
+                    onStop: { playerViewModel.stopAndResetPlayback() },
+                    onOpen: { playerViewModel.presentPlayer(for: currentSong) }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -41,28 +71,35 @@ struct ContentView: View {
         }
         .tint(.green)
         .preferredColorScheme(.dark)
-        .environmentObject(vm)
+        .environmentObject(localizationViewModel)
+        .environmentObject(importViewModel)
+        .environmentObject(playlistViewModel)
         .environmentObject(settingsStore)
+        .environmentObject(authViewModel)
+        .environmentObject(libraryViewModel)
+        .environmentObject(playerViewModel)
         .task {
             if scenePhase == .active {
                 DispatchQueue.main.async {
-                    vm.handleSceneDidBecomeActive()
+                    playerViewModel.handleSceneDidBecomeActive()
                 }
             }
+
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 DispatchQueue.main.async {
-                    vm.handleSceneDidBecomeActive()
+                    playerViewModel.handleSceneDidBecomeActive()
                 }
             } else if newPhase == .inactive || newPhase == .background {
                 DispatchQueue.main.async {
-                    vm.savePlaybackSnapshotNow()
+                    playerViewModel.savePlaybackSnapshotNow()
                 }
             }
         }
-        .sheet(item: $vm.playerSheetSong) { song in
-            MusicPlayerView(song: song, controller: vm)
+        .sheet(item: $playerViewModel.playerSheetSong) { song in
+            MusicPlayerView(song: song, controller: playerViewModel)
+                .environmentObject(libraryViewModel)
         }
     }
 }

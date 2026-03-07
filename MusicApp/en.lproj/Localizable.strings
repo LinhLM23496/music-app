@@ -5,6 +5,7 @@
 "home.title" = "Home";
 "home.featured" = "Featured Music";
 "home.favorites" = "Favorites";
+"home.favorites.empty.cta" = "Drop some hearts on your fave tracks, your vibe list shows up here.";
 
 "playlist.title" = "Playlist";
 "playlist.new" = "New";
@@ -47,3 +48,7 @@
 "player.sleep.15m" = "15 minutes";
 "player.sleep.30m" = "30 minutes";
 "player.sleep.remaining" = "Sleep in %@";
+
+"auth.guest" = "Guest";
+"auth.signin.demo" = "Sign In (Demo)";
+"auth.signout" = "Sign Out";

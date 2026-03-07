@@ -1,23 +1,24 @@
 import SwiftUI
 
 struct InfoTabView: View {
-    @EnvironmentObject private var vm: MusicLibraryViewModel
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var authViewModel: AuthViewModel
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     VStack(spacing: 10) {
-                        Image(systemName: vm.user.avatarSymbol)
+                        Image(systemName: authViewModel.activeUser.avatarSymbol)
                             .resizable()
                             .scaledToFit()
                             .frame(width: 88, height: 88)
                             .foregroundStyle(.green)
 
-                        Text(vm.user.username)
+                        Text(authViewModel.currentUser?.displayName ?? localizationViewModel.t("auth.guest"))
                             .font(.title2.bold())
-                        Text("\(vm.localized("info.version")): \(vm.user.appVersion)")
+                        Text("\(localizationViewModel.t("info.version")): \(authViewModel.activeUser.appVersion)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -27,9 +28,9 @@ struct InfoTabView: View {
 
                     VStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(vm.localized("info.language"))
+                            Text(localizationViewModel.t("info.language"))
                                 .font(.subheadline.weight(.semibold))
-                            Picker(vm.localized("info.language"), selection: $settingsStore.language) {
+                            Picker(localizationViewModel.t("info.language"), selection: $settingsStore.language) {
                                 ForEach(AppLanguage.allCases) { language in
                                     Text(language.displayName).tag(language)
                                 }
@@ -37,22 +38,35 @@ struct InfoTabView: View {
                             .pickerStyle(.segmented)
                         }
 
-                        Toggle(vm.localized("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
-                        Toggle(vm.localized("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
+                        Toggle(localizationViewModel.t("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
+                        Toggle(localizationViewModel.t("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
 
                         Button {
+                            if authViewModel.isLoggedIn {
+                                authViewModel.signOut()
+                            } else {
+                                authViewModel.signInDemo()
+                            }
                         } label: {
-                            settingsRow(vm.localized("info.account"), icon: "person.crop.circle")
+                            settingsRow(
+                                authViewModel.isLoggedIn ? localizationViewModel.t("auth.signout") : localizationViewModel.t("auth.signin.demo"),
+                                icon: authViewModel.isLoggedIn ? "rectangle.portrait.and.arrow.right" : "person.crop.circle.badge.plus"
+                            )
                         }
 
                         Button {
                         } label: {
-                            settingsRow(vm.localized("info.privacy"), icon: "lock.shield")
+                            settingsRow(localizationViewModel.t("info.account"), icon: "person.crop.circle")
                         }
 
                         Button {
                         } label: {
-                            settingsRow(vm.localized("info.help"), icon: "questionmark.circle")
+                            settingsRow(localizationViewModel.t("info.privacy"), icon: "lock.shield")
+                        }
+
+                        Button {
+                        } label: {
+                            settingsRow(localizationViewModel.t("info.help"), icon: "questionmark.circle")
                         }
                     }
                     .tint(.green)
@@ -63,7 +77,7 @@ struct InfoTabView: View {
                 .padding(.bottom, 59)
             }
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle(vm.localized("info.title"))
+            .navigationTitle(localizationViewModel.t("info.title"))
         }
     }
 

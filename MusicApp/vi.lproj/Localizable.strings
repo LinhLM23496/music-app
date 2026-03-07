@@ -5,6 +5,7 @@
 "home.title" = "Trang Chủ";
 "home.featured" = "Nhạc Nổi Bật";
 "home.favorites" = "Yêu Thích";
+"home.favorites.empty.cta" = "Thả tim mấy bài bạn mê đi, list xịn sẽ hiện ở đây.";
 
 "playlist.title" = "Danh Sách";
 "playlist.new" = "Mới";
@@ -47,3 +48,7 @@
 "player.sleep.15m" = "15 phút";
 "player.sleep.30m" = "30 phút";
 "player.sleep.remaining" = "Tắt sau %@";
+
+"auth.guest" = "Khách";
+"auth.signin.demo" = "Đăng Nhập (Demo)";
+"auth.signout" = "Đăng Xuất";
