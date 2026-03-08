@@ -88,7 +88,8 @@ final class AppContainer {
     func makePlayerViewModel(libraryDataSource: LibraryPlaybackDataProviding) -> PlayerViewModel {
         PlayerViewModel(
             settingsStore: .shared,
-            libraryDataSource: libraryDataSource
+            libraryDataSource: libraryDataSource,
+            nowPlayingService: SystemNowPlayingService()
         )
     }
 }
