@@ -66,6 +66,7 @@ final class PlayerViewModel: ObservableObject {
     private var activeSong: Song?
     private var didPerformInitialActivationWork = false
     private var lastPersistedSnapshotSecond: Int = -1
+    private var pendingRestorePositionSeconds: Double?
 
     private enum Storage {
         static let musicFolderName = "MusicFiles"
@@ -160,6 +161,7 @@ final class PlayerViewModel: ObservableObject {
         if !playbackController.hasLoadedItem {
             if let song = currentSong {
                 loadAndPlay(song: song)
+                applyPendingRestorePositionIfNeeded()
             }
             return
         }
@@ -292,6 +294,7 @@ final class PlayerViewModel: ObservableObject {
         }
 
         guard audioURL(for: song) != nil else { return }
+        pendingRestorePositionSeconds = nil
 
         let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
         activeSong = selectedSong
@@ -416,13 +419,13 @@ final class PlayerViewModel: ObservableObject {
         hasPlaybackSession = true
         isMiniPlayerHidden = false
 
-        loadAndPlay(song: selectedSong, autoPlay: false)
         let estimatedDuration = max(selectedSong.duration, 1)
         let clampedPosition = min(max(snapshot.positionSeconds, 0), estimatedDuration)
-        if clampedPosition > 0 {
-            playbackController.seek(to: clampedPosition)
-        }
-        playbackController.pause()
+        pendingRestorePositionSeconds = clampedPosition
+        playbackProgress.duration = estimatedDuration
+        playbackProgress.currentTime = clampedPosition
+        playbackProgress.progress = min(max(clampedPosition / max(estimatedDuration, 0.001), 0), 1)
+        isPlaying = false
         refreshNowPlayingInfo()
     }
 
@@ -674,5 +677,12 @@ final class PlayerViewModel: ObservableObject {
     private func randomPlayableSong() -> Song? {
         let mergedSongs = importedSongs + librarySongs
         return mergedSongs.shuffled().first(where: { audioURL(for: $0) != nil })
+    }
+
+    private func applyPendingRestorePositionIfNeeded() {
+        guard let position = pendingRestorePositionSeconds, position > 0 else { return }
+        playbackController.seek(to: position)
+        persistPlaybackSnapshotForCurrentTrack(position: position)
+        pendingRestorePositionSeconds = nil
     }
 }
