@@ -257,6 +257,32 @@ final class PlaylistViewModel: ObservableObject {
         playlistRepository.savePlaylists(playlists)
     }
 
+    func toggleSong(_ song: Song, in playlistID: UUID) -> Bool {
+        if containsSong(song.id, in: playlistID) {
+            playlists = playlistUseCases.removeSong(song, from: playlistID, in: playlists)
+            playlistRepository.savePlaylists(playlists)
+            return false
+        }
+
+        playlists = playlistUseCases.addSong(song, to: playlistID, in: playlists)
+        playlistRepository.savePlaylists(playlists)
+        return true
+    }
+
+    func containsSong(_ songID: UUID, in playlistID: UUID) -> Bool {
+        guard let playlist = playlists.first(where: { $0.id == playlistID }) else { return false }
+        return playlist.songIDs.contains(songID)
+    }
+
+    func removeSong(_ song: Song, from playlistID: UUID) {
+        playlists = playlistUseCases.removeSong(song, from: playlistID, in: playlists)
+        playlistRepository.savePlaylists(playlists)
+    }
+
+    func playlist(id: UUID) -> Playlist? {
+        playlists.first(where: { $0.id == id })
+    }
+
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {
         playlistUseCases.songs(in: playlist, allSongs: allSongs)
     }

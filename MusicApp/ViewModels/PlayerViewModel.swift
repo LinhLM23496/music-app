@@ -149,12 +149,16 @@ final class PlayerViewModel: ObservableObject {
             return
         }
         let autoQueue = libraryUseCases.suggestedQueue(for: song, songs: librarySongs, importedSongs: importedSongs)
-        play(song: song, in: autoQueue)
+        startPlayback(song: song, in: autoQueue)
+    }
+
+    func play(song: Song, in queue: [Song]) {
+        startPlayback(song: song, in: queue)
     }
 
     func playFromQueue(index: Int) {
         guard let song = queueStore.song(at: index) else { return }
-        play(song: song, in: queueStore.queueSongs)
+        startPlayback(song: song, in: queueStore.queueSongs)
     }
 
     func togglePlayPause() {
@@ -183,7 +187,7 @@ final class PlayerViewModel: ObservableObject {
         case .seekToStart:
             seek(to: 0)
         case .play(let song):
-            play(song: song, in: queueStore.queueSongs)
+            startPlayback(song: song, in: queueStore.queueSongs)
         case .none:
             break
         }
@@ -288,7 +292,7 @@ final class PlayerViewModel: ObservableObject {
         libraryDataSource.language
     }
 
-    private func play(song: Song, in queue: [Song]) {
+    private func startPlayback(song: Song, in queue: [Song]) {
         if resumeIfCurrentSong(song) {
             return
         }
@@ -459,7 +463,7 @@ final class PlayerViewModel: ObservableObject {
     private func advanceToNext(autoTriggered: Bool) {
         switch queueStore.nextAction(autoTriggered: autoTriggered) {
         case .play(let song):
-            play(song: song, in: queueStore.queueSongs)
+            startPlayback(song: song, in: queueStore.queueSongs)
         case .stopAtEnd:
             playbackController.stopAtEnd()
         }

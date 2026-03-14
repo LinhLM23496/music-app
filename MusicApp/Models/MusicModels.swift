@@ -38,7 +38,7 @@ struct Song: Identifiable, Hashable {
     let accent: Color
 }
 
-struct Playlist: Identifiable {
+struct Playlist: Identifiable, Hashable {
     let id: UUID
     var nameEN: String
     var nameVI: String

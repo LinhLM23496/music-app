@@ -5,10 +5,13 @@ struct PlaylistTabView: View {
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @EnvironmentObject private var importViewModel: ImportViewModel
+    @EnvironmentObject private var playerViewModel: PlayerViewModel
 
     @State private var showingCreatePlaylist = false
     @State private var newPlaylistName = ""
     @State private var selectedPlaylistForAdd: Playlist?
+    @State private var selectedPlaylistForDetail: Playlist?
+    @State private var playlistPendingDeletion: Playlist?
     @State private var toastMessage: String?
     @State private var toastWorkItem: DispatchWorkItem?
 
@@ -26,14 +29,37 @@ struct PlaylistTabView: View {
                     playlistRow(playlist)
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(role: .destructive) {
+                                playlistPendingDeletion = playlist
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .tint(.red)
+                        }
                 }
-                .onDelete(perform: playlistViewModel.deletePlaylist)
             }
             .safeAreaPadding(.bottom, 59)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(Color.black.ignoresSafeArea())
             .navigationTitle(localizationViewModel.t("playlist.title"))
+            .navigationDestination(item: $selectedPlaylistForDetail) { playlist in
+                PlaylistDetailView(
+                    playlistID: playlist.id,
+                    allSongs: allSongs,
+                    onRequestAddSongs: {
+                        selectedPlaylistForAdd = playlistViewModel.playlist(id: playlist.id)
+                    },
+                    onShowToast: { message in
+                        showToast(message)
+                    }
+                )
+                .environmentObject(localizationViewModel)
+                .environmentObject(playlistViewModel)
+                .environmentObject(libraryViewModel)
+                .environmentObject(playerViewModel)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -54,12 +80,32 @@ struct PlaylistTabView: View {
                 newPlaylistName = ""
             }
         }
+        .alert(
+            localizationViewModel.t("playlist.delete.confirm.title"),
+            isPresented: Binding(
+                get: { playlistPendingDeletion != nil },
+                set: { if !$0 { playlistPendingDeletion = nil } }
+            ),
+            presenting: playlistPendingDeletion
+        ) { playlist in
+            Button(localizationViewModel.t("playlist.delete.confirm.button"), role: .destructive) {
+                guard let index = playlistViewModel.playlists.firstIndex(where: { $0.id == playlist.id }) else { return }
+                playlistViewModel.deletePlaylist(at: IndexSet(integer: index))
+                playlistPendingDeletion = nil
+            }
+            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
+                playlistPendingDeletion = nil
+            }
+        } message: { _ in
+            Text(localizationViewModel.t("playlist.delete.confirm.message"))
+        }
         .sheet(item: $selectedPlaylistForAdd) { playlist in
             AddSongToPlaylistView(
                 playlist: playlist,
                 songs: allSongs,
-                onSongAdded: {
-                    showToast(localizationViewModel.t("playlist.add.song.success"))
+                onSongToggled: { didAdd in
+                    let key = didAdd ? "playlist.add.song.success" : "playlist.remove.song.success"
+                    showToast(localizationViewModel.t(key))
                 }
             )
                 .environmentObject(localizationViewModel)
@@ -113,6 +159,10 @@ struct PlaylistTabView: View {
         }
         .padding(12)
         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            selectedPlaylistForDetail = playlist
+        }
     }
 
     private func showToast(_ message: String) {
@@ -130,20 +180,32 @@ struct PlaylistTabView: View {
 struct AddSongToPlaylistView: View {
     let playlist: Playlist
     let songs: [Song]
-    let onSongAdded: () -> Void
+    let onSongToggled: (Bool) -> Void
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
+    private var selectedSongIDs: Set<UUID> {
+        let ids = playlistViewModel.playlists
+            .first(where: { $0.id == playlist.id })?
+            .songIDs ?? []
+        return Set(ids)
+    }
+
     var body: some View {
         NavigationStack {
             List(songs) { song in
                 Button {
-                    playlistViewModel.addSong(song, to: playlist.id)
-                    onSongAdded()
+                    let didAdd = playlistViewModel.toggleSong(song, in: playlist.id)
+                    onSongToggled(didAdd)
                 } label: {
-                    SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
+                    HStack(spacing: 10) {
+                        SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
+                        Image(systemName: selectedSongIDs.contains(song.id) ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(selectedSongIDs.contains(song.id) ? .green : .secondary)
+                    }
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(Color.clear)
