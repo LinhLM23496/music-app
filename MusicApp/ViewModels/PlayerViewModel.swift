@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import MediaPlayer
 
 @MainActor
 final class PlayerUIStore: ObservableObject {
@@ -58,25 +57,29 @@ final class PlayerViewModel: ObservableObject {
     private let queueStore: QueueStore
     private let playbackController: PlaybackController
     private let snapshotStore: PlaybackSnapshotStore
+    private let nowPlayingService: NowPlayingControlling
     private let libraryUseCases = LibraryUseCases()
     private let sleepTimerService = SleepTimerService()
     private let playerUIStore = PlayerUIStore()
-    private let nowPlayingInfoCenter = MPNowPlayingInfoCenter.default()
-    private let remoteCommandCenter = MPRemoteCommandCenter.shared()
 
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
     private var didPerformInitialActivationWork = false
     private var lastPersistedSnapshotSecond: Int = -1
-    private var didConfigureRemoteCommands = false
+    private var pendingRestorePositionSeconds: Double?
 
     private enum Storage {
         static let musicFolderName = "MusicFiles"
     }
 
-    init(settingsStore: AppSettingsStore, libraryDataSource: LibraryPlaybackDataProviding) {
+    init(
+        settingsStore: AppSettingsStore,
+        libraryDataSource: LibraryPlaybackDataProviding,
+        nowPlayingService: NowPlayingControlling
+    ) {
         self.settingsStore = settingsStore
         self.libraryDataSource = libraryDataSource
+        self.nowPlayingService = nowPlayingService
 
         let initialShuffle = settingsStore.shuffleEnabled
         let initialRepeatMode = settingsStore.repeatMode
@@ -107,7 +110,7 @@ final class PlayerViewModel: ObservableObject {
         bindSleepTimerService()
         bindProgressSnapshotPersistence()
         bindNowPlayingInfo()
-        configureRemoteCommandsIfNeeded()
+        configureRemoteCommands()
         refreshNowPlayingInfo()
     }
 
@@ -158,6 +161,7 @@ final class PlayerViewModel: ObservableObject {
         if !playbackController.hasLoadedItem {
             if let song = currentSong {
                 loadAndPlay(song: song)
+                applyPendingRestorePositionIfNeeded()
             }
             return
         }
@@ -290,6 +294,7 @@ final class PlayerViewModel: ObservableObject {
         }
 
         guard audioURL(for: song) != nil else { return }
+        pendingRestorePositionSeconds = nil
 
         let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
         activeSong = selectedSong
@@ -414,13 +419,13 @@ final class PlayerViewModel: ObservableObject {
         hasPlaybackSession = true
         isMiniPlayerHidden = false
 
-        loadAndPlay(song: selectedSong, autoPlay: false)
         let estimatedDuration = max(selectedSong.duration, 1)
         let clampedPosition = min(max(snapshot.positionSeconds, 0), estimatedDuration)
-        if clampedPosition > 0 {
-            playbackController.seek(to: clampedPosition)
-        }
-        playbackController.pause()
+        pendingRestorePositionSeconds = clampedPosition
+        playbackProgress.duration = estimatedDuration
+        playbackProgress.currentTime = clampedPosition
+        playbackProgress.progress = min(max(clampedPosition / max(estimatedDuration, 0.001), 0), 1)
+        isPlaying = false
         refreshNowPlayingInfo()
     }
 
@@ -572,69 +577,53 @@ final class PlayerViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func configureRemoteCommandsIfNeeded() {
-        guard !didConfigureRemoteCommands else { return }
-        didConfigureRemoteCommands = true
+    private func configureRemoteCommands() {
+        nowPlayingService.configureRemoteCommands(
+            handlers: RemotePlaybackCommandHandlers(
+                onPlay: { [weak self] in
+                    guard let self else { return false }
+                    if self.isPlaying { return true }
 
-        remoteCommandCenter.playCommand.isEnabled = true
-        remoteCommandCenter.pauseCommand.isEnabled = true
-        remoteCommandCenter.nextTrackCommand.isEnabled = true
-        remoteCommandCenter.previousTrackCommand.isEnabled = true
-        remoteCommandCenter.changePlaybackPositionCommand.isEnabled = true
+                    if self.playbackController.hasLoadedItem {
+                        self.playbackController.resume(rate: self.playbackSpeed)
+                        self.persistPlaybackSnapshotForCurrentTrack()
+                        return true
+                    }
 
-        remoteCommandCenter.playCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            if self.isPlaying { return .success }
+                    if self.tryResumeFromSavedSnapshotForRemotePlay() {
+                        return true
+                    }
 
-            if self.playbackController.hasLoadedItem {
-                self.playbackController.resume(rate: self.playbackSpeed)
-                self.persistPlaybackSnapshotForCurrentTrack()
-                return .success
-            }
-
-            if self.tryResumeFromSavedSnapshotForRemotePlay() {
-                return .success
-            }
-
-            let fallbackSong = self.randomPlayableSong()
-            guard let song = fallbackSong else { return .commandFailed }
-            self.play(song: song)
-            return .success
-        }
-
-        remoteCommandCenter.pauseCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            guard self.isPlaying else { return .success }
-            self.playbackController.pause()
-            self.persistPlaybackSnapshotForCurrentTrack()
-            return .success
-        }
-
-        remoteCommandCenter.nextTrackCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            self.nextSong()
-            return .success
-        }
-
-        remoteCommandCenter.previousTrackCommand.addTarget { [weak self] _ in
-            guard let self else { return .commandFailed }
-            self.previousSong()
-            return .success
-        }
-
-        remoteCommandCenter.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard
-                let self,
-                let positionEvent = event as? MPChangePlaybackPositionCommandEvent
-            else {
-                return .commandFailed
-            }
-
-            self.playbackController.seek(to: positionEvent.positionTime)
-            self.persistPlaybackSnapshotForCurrentTrack(position: positionEvent.positionTime)
-            self.refreshNowPlayingInfo()
-            return .success
-        }
+                    guard let song = self.randomPlayableSong() else { return false }
+                    self.play(song: song)
+                    return true
+                },
+                onPause: { [weak self] in
+                    guard let self else { return false }
+                    guard self.isPlaying else { return true }
+                    self.playbackController.pause()
+                    self.persistPlaybackSnapshotForCurrentTrack()
+                    return true
+                },
+                onNext: { [weak self] in
+                    guard let self else { return false }
+                    self.nextSong()
+                    return true
+                },
+                onPrevious: { [weak self] in
+                    guard let self else { return false }
+                    self.previousSong()
+                    return true
+                },
+                onChangePosition: { [weak self] positionTime in
+                    guard let self else { return false }
+                    self.playbackController.seek(to: positionTime)
+                    self.persistPlaybackSnapshotForCurrentTrack(position: positionTime)
+                    self.refreshNowPlayingInfo()
+                    return true
+                }
+            )
+        )
     }
 
     private func refreshNowPlayingInfo() {
@@ -644,19 +633,19 @@ final class PlayerViewModel: ObservableObject {
         }
 
         let duration = playbackProgress.duration > 0 ? playbackProgress.duration : max(song.duration, 1)
-        var info = nowPlayingInfoCenter.nowPlayingInfo ?? [:]
-        info[MPMediaItemPropertyTitle] = localizedSongTitle(song)
-        info[MPMediaItemPropertyArtist] = song.artist
-        info[MPMediaItemPropertyAlbumTitle] = song.album
-        info[MPMediaItemPropertyPlaybackDuration] = duration
-        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(playbackProgress.currentTime, 0)
-        info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? playbackSpeed : 0
-        info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = playbackSpeed
-        nowPlayingInfoCenter.nowPlayingInfo = info
+        nowPlayingService.updateNowPlaying(
+            title: localizedSongTitle(song),
+            artist: song.artist,
+            album: song.album,
+            duration: duration,
+            elapsedTime: max(playbackProgress.currentTime, 0),
+            playbackRate: isPlaying ? playbackSpeed : 0,
+            defaultRate: playbackSpeed
+        )
     }
 
     private func clearNowPlayingInfo() {
-        nowPlayingInfoCenter.nowPlayingInfo = nil
+        nowPlayingService.clearNowPlaying()
     }
 
     private func tryResumeFromSavedSnapshotForRemotePlay() -> Bool {
@@ -688,5 +677,12 @@ final class PlayerViewModel: ObservableObject {
     private func randomPlayableSong() -> Song? {
         let mergedSongs = importedSongs + librarySongs
         return mergedSongs.shuffled().first(where: { audioURL(for: $0) != nil })
+    }
+
+    private func applyPendingRestorePositionIfNeeded() {
+        guard let position = pendingRestorePositionSeconds, position > 0 else { return }
+        playbackController.seek(to: position)
+        persistPlaybackSnapshotForCurrentTrack(position: position)
+        pendingRestorePositionSeconds = nil
     }
 }

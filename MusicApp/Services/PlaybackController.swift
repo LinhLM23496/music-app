@@ -13,6 +13,7 @@ final class PlaybackController: ObservableObject {
     private var timeObserverToken: Any?
     private var didPlayToEndObserver: NSObjectProtocol?
     private var pauseLiveUpdatesUntil: Date = .distantPast
+    private var stagedPlaybackURLsBySourcePath: [String: URL] = [:]
 
     var currentTime: Double {
         progress.currentTime
@@ -24,16 +25,21 @@ final class PlaybackController: ObservableObject {
 
     func load(song: Song, audioURL: URL?, autoPlay: Bool, playbackRate: Double) {
         cleanup()
+        progress.progress = 0
+        progress.currentTime = 0
+        progress.duration = max(song.duration, 1)
 
         guard let audioURL else {
             isPlaying = false
-            progress.progress = 0
-            progress.currentTime = 0
-            progress.duration = song.duration
             return
         }
 
-        let item = AVPlayerItem(url: audioURL)
+        let playbackURL = playbackReadyURL(from: audioURL)
+        if !canDecodeForPlayback(playbackURL) {
+            isPlaying = false
+            return
+        }
+        let item = AVPlayerItem(url: playbackURL)
         let player = AVPlayer(playerItem: item)
         self.player = player
         observePlayer(player: player, item: item, fallbackDuration: song.duration)
@@ -166,5 +172,52 @@ final class PlaybackController: ObservableObject {
         }
 
         player = nil
+    }
+
+    private func playbackReadyURL(from originalURL: URL) -> URL {
+        guard originalURL.isFileURL else { return originalURL }
+
+        let fileName = originalURL.lastPathComponent
+        if fileName.canBeConverted(to: .ascii) {
+            return originalURL
+        }
+
+        let sourceKey = originalURL.path
+        if let stagedURL = stagedPlaybackURLsBySourcePath[sourceKey],
+           FileManager.default.fileExists(atPath: stagedURL.path) {
+            return stagedURL
+        }
+
+        let ext = originalURL.pathExtension.isEmpty ? "mp3" : originalURL.pathExtension
+        let safeName = "playback-\(abs(sourceKey.hashValue)).\(ext)"
+        let folderURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PlaybackStaging", isDirectory: true)
+        let stagedURL = folderURL.appendingPathComponent(safeName)
+
+        do {
+            if !FileManager.default.fileExists(atPath: folderURL.path) {
+                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            }
+
+            if FileManager.default.fileExists(atPath: stagedURL.path) {
+                try FileManager.default.removeItem(at: stagedURL)
+            }
+
+            try FileManager.default.copyItem(at: originalURL, to: stagedURL)
+            stagedPlaybackURLsBySourcePath[sourceKey] = stagedURL
+            return stagedURL
+        } catch {
+            return originalURL
+        }
+    }
+
+    private func canDecodeForPlayback(_ url: URL) -> Bool {
+        guard url.isFileURL else { return true }
+        do {
+            _ = try AVAudioFile(forReading: url)
+            return true
+        } catch {
+            return false
+        }
     }
 }
