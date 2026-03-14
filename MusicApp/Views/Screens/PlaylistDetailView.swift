@@ -10,6 +10,10 @@ struct PlaylistDetailView: View {
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @EnvironmentObject private var playerViewModel: PlayerViewModel
+    @Environment(\.editMode) private var editMode
+
+    @State private var showingRenamePlaylist = false
+    @State private var renamedPlaylistName = ""
 
     private var playlist: Playlist? {
         playlistViewModel.playlist(id: playlistID)
@@ -38,6 +42,7 @@ struct PlaylistDetailView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        guard !(editMode?.wrappedValue.isEditing ?? false) else { return }
                         playerViewModel.play(song: song, in: playlistSongs, playlistID: playlistID)
                         playerViewModel.presentPlayer(for: song)
                     }
@@ -54,6 +59,9 @@ struct PlaylistDetailView: View {
                         .tint(.red)
                     }
                 }
+                .onMove { offsets, destination in
+                    playlistViewModel.moveSongs(in: playlistID, from: offsets, to: destination)
+                }
             }
         }
         .safeAreaPadding(.bottom, 59)
@@ -64,6 +72,15 @@ struct PlaylistDetailView: View {
             playlist.map { localizationViewModel.playlistName($0) }
                 ?? localizationViewModel.t("playlist.title")
         )
+        .alert(localizationViewModel.t("playlist.rename"), isPresented: $showingRenamePlaylist) {
+            TextField(localizationViewModel.t("playlist.name"), text: $renamedPlaylistName)
+            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
+                renamedPlaylistName = playlist?.nameEN ?? ""
+            }
+            Button(localizationViewModel.t("playlist.rename.button")) {
+                playlistViewModel.renamePlaylist(id: playlistID, name: renamedPlaylistName)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if let firstSong = playlistSongs.first {
                 Button {
@@ -83,12 +100,27 @@ struct PlaylistDetailView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                EditButton()
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    onRequestAddSongs()
-                } label: {
-                    Label(localizationViewModel.t("playlist.add.song"), systemImage: "plus")
+                HStack(spacing: 10) {
+                    Button {
+                        renamedPlaylistName = playlist?.nameEN ?? ""
+                        showingRenamePlaylist = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+
+                    Button {
+                        onRequestAddSongs()
+                    } label: {
+                        Label(localizationViewModel.t("playlist.add.song"), systemImage: "plus")
+                    }
                 }
+                .padding(.horizontal, 6)
+                .padding(.trailing, 4)
             }
         }
     }

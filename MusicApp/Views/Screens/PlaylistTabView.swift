@@ -30,7 +30,7 @@ struct PlaylistTabView: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
+                            Button {
                                 playlistPendingDeletion = playlist
                             } label: {
                                 Image(systemName: "trash")

@@ -14,6 +14,8 @@
 "playlist.play" = "Phát Playlist";
 "playlist.cancel" = "Hủy";
 "playlist.create.button" = "Tạo";
+"playlist.rename" = "Đổi Tên Playlist";
+"playlist.rename.button" = "Lưu";
 "playlist.add.song" = "Thêm Bài";
 "playlist.add.songs" = "Thêm Bài Hát";
 "playlist.add.to" = "Thêm vào Playlist";

@@ -27,6 +27,19 @@ struct PlaylistUseCases {
         return next
     }
 
+    func renamePlaylist(id: UUID, name: String, in playlists: [Playlist]) -> [Playlist] {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let playlistIndex = playlists.firstIndex(where: { $0.id == id }) else {
+            return playlists
+        }
+
+        var next = playlists
+        next[playlistIndex].nameEN = trimmed
+        next[playlistIndex].nameVI = trimmed
+        return next
+    }
+
     func addSong(_ song: Song, to playlistID: UUID, in playlists: [Playlist]) -> [Playlist] {
         guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else {
             return playlists
@@ -56,5 +69,25 @@ struct PlaylistUseCases {
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {
         let map = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.id, $0) })
         return playlist.songIDs.compactMap { map[$0] }
+    }
+
+    func moveSongs(in playlistID: UUID, from offsets: IndexSet, to destination: Int, in playlists: [Playlist]) -> [Playlist] {
+        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else {
+            return playlists
+        }
+
+        var next = playlists
+        var songIDs = next[playlistIndex].songIDs
+        let movingItems = offsets.sorted().map { songIDs[$0] }
+
+        for index in offsets.sorted(by: >) {
+            songIDs.remove(at: index)
+        }
+
+        let adjustedDestination = offsets.filter { $0 < destination }.count
+        let targetIndex = max(0, min(destination - adjustedDestination, songIDs.count))
+        songIDs.insert(contentsOf: movingItems, at: targetIndex)
+        next[playlistIndex].songIDs = songIDs
+        return next
     }
 }

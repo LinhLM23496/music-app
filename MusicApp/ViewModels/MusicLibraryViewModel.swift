@@ -252,6 +252,11 @@ final class PlaylistViewModel: ObservableObject {
         playlistRepository.savePlaylists(playlists)
     }
 
+    func renamePlaylist(id: UUID, name: String) {
+        playlists = playlistUseCases.renamePlaylist(id: id, name: name, in: playlists)
+        playlistRepository.savePlaylists(playlists)
+    }
+
     func addSong(_ song: Song, to playlistID: UUID) {
         playlists = playlistUseCases.addSong(song, to: playlistID, in: playlists)
         playlistRepository.savePlaylists(playlists)
@@ -276,6 +281,11 @@ final class PlaylistViewModel: ObservableObject {
 
     func removeSong(_ song: Song, from playlistID: UUID) {
         playlists = playlistUseCases.removeSong(song, from: playlistID, in: playlists)
+        playlistRepository.savePlaylists(playlists)
+    }
+
+    func moveSongs(in playlistID: UUID, from offsets: IndexSet, to destination: Int) {
+        playlists = playlistUseCases.moveSongs(in: playlistID, from: offsets, to: destination, in: playlists)
         playlistRepository.savePlaylists(playlists)
     }
 
