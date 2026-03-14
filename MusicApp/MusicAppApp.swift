@@ -12,17 +12,20 @@ import Combine
 final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
     private let libraryViewModel: LibraryViewModel
     private let importViewModel: ImportViewModel
+    private let playlistViewModel: PlaylistViewModel
     private let settingsStore: AppSettingsStore
     private let localizationService: LocalizationProviding
 
     init(
         libraryViewModel: LibraryViewModel,
         importViewModel: ImportViewModel,
+        playlistViewModel: PlaylistViewModel,
         settingsStore: AppSettingsStore,
         localizationService: LocalizationProviding
     ) {
         self.libraryViewModel = libraryViewModel
         self.importViewModel = importViewModel
+        self.playlistViewModel = playlistViewModel
         self.settingsStore = settingsStore
         self.localizationService = localizationService
     }
@@ -45,6 +48,10 @@ final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
 
     func localized(_ key: String) -> String {
         localizationService.string(key, language: settingsStore.language)
+    }
+
+    func playlist(id: UUID) -> Playlist? {
+        playlistViewModel.playlist(id: id)
     }
 }
 

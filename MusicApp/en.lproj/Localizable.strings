@@ -16,7 +16,9 @@
 "playlist.create.button" = "Create";
 "playlist.add.song" = "Add Song";
 "playlist.add.songs" = "Add Songs";
+"playlist.add.to" = "Add to Playlist";
 "playlist.add.song.success" = "Added to playlist.";
+"playlist.create.and.add.success" = "Created playlist and added song.";
 "playlist.remove.song" = "Remove";
 "playlist.remove.song.success" = "Removed from playlist.";
 "playlist.delete.confirm.title" = "Delete playlist?";

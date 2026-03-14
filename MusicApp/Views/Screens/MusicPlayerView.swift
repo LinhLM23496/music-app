@@ -5,9 +5,16 @@ struct MusicPlayerView: View {
     let controller: PlayerViewModel
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
+    @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @StateObject private var uiState: MusicPlayerUIState
     @State private var showQueueSheet = false
+    @State private var showPlaylistSheet = false
+    @State private var showCreatePlaylistPrompt = false
+    @State private var newPlaylistName = ""
+    @State private var toastMessage: String?
+    @State private var toastWorkItem: DispatchWorkItem?
 
     init(song: Song, controller: PlayerViewModel) {
         self.song = song
@@ -55,7 +62,8 @@ struct MusicPlayerView: View {
                     song: uiState.displaySong,
                     language: uiState.language,
                     isFavorite: libraryViewModel.favoriteIDs.contains(uiState.displaySong.id),
-                    onToggleFavorite: { libraryViewModel.toggleFavorite(songID: uiState.displaySong.id) }
+                    onToggleFavorite: { libraryViewModel.toggleFavorite(songID: uiState.displaySong.id) },
+                    onAddToPlaylist: { showPlaylistSheet = true }
                 )
                 .padding(.horizontal, 24)
 
@@ -180,6 +188,51 @@ struct MusicPlayerView: View {
             queueSheet
                 .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $showPlaylistSheet) {
+            PlaylistPickerSheet(
+                song: uiState.displaySong,
+                playlists: playlistViewModel.playlists,
+                language: uiState.language,
+                onSelectPlaylist: { playlist in
+                    let didAdd = playlistViewModel.toggleSong(uiState.displaySong, in: playlist.id)
+                    showPlaylistSheet = false
+                    let key = didAdd ? "playlist.add.song.success" : "playlist.remove.song.success"
+                    showToast(localized(key))
+                },
+                onCreatePlaylist: {
+                    showPlaylistSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        showCreatePlaylistPrompt = true
+                    }
+                }
+            )
+            .environmentObject(localizationViewModel)
+            .presentationDetents([.medium, .large])
+        }
+        .alert(localized("playlist.create"), isPresented: $showCreatePlaylistPrompt) {
+            TextField(localized("playlist.name"), text: $newPlaylistName)
+            Button(localized("playlist.cancel"), role: .cancel) {
+                newPlaylistName = ""
+            }
+            Button(localized("playlist.create.button")) {
+                let trimmed = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                playlistViewModel.createPlaylist(name: trimmed)
+                if let playlist = playlistViewModel.playlists.first {
+                    _ = playlistViewModel.toggleSong(uiState.displaySong, in: playlist.id)
+                    showToast(localized("playlist.create.and.add.success"))
+                }
+                newPlaylistName = ""
+            }
+        }
+        .overlay(alignment: .top) {
+            if let toastMessage {
+                AppToastView(message: toastMessage)
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: toastMessage != nil)
     }
 
     private var queueSheet: some View {
@@ -216,6 +269,17 @@ struct MusicPlayerView: View {
             .navigationTitle(localized("player.queue"))
         }
     }
+
+    private func showToast(_ message: String) {
+        toastWorkItem?.cancel()
+        toastMessage = message
+
+        let workItem = DispatchWorkItem {
+            toastMessage = nil
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: workItem)
+    }
 }
 
 private struct PlayerBackgroundView: View {
@@ -249,6 +313,7 @@ private struct NowPlayingInfoView: View {
     let language: AppLanguage
     let isFavorite: Bool
     let onToggleFavorite: () -> Void
+    let onAddToPlaylist: () -> Void
 
     var body: some View {
         HStack {
@@ -262,10 +327,88 @@ private struct NowPlayingInfoView: View {
 
             Spacer()
 
-            Button(action: onToggleFavorite) {
-                Image(systemName: isFavorite ? "heart.fill" : "heart")
-                    .font(.title2)
-                    .foregroundStyle(isFavorite ? .pink : .white)
+            HStack(spacing: 16) {
+                Button(action: onAddToPlaylist) {
+                    Image(systemName: "text.badge.plus")
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+
+                Button(action: onToggleFavorite) {
+                    Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        .font(.title2)
+                        .foregroundStyle(isFavorite ? .pink : .white)
+                }
+            }
+        }
+    }
+}
+
+private struct PlaylistPickerSheet: View {
+    let song: Song
+    let playlists: [Playlist]
+    let language: AppLanguage
+    let onSelectPlaylist: (Playlist) -> Void
+    let onCreatePlaylist: () -> Void
+
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
+    @EnvironmentObject private var playlistViewModel: PlaylistViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(playlists) { playlist in
+                    Button {
+                        onSelectPlaylist(playlist)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            AlbumArtworkView(symbol: playlist.coverSymbol, accent: song.accent, cornerRadius: 12)
+                                .frame(width: 52, height: 52)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(localizationViewModel.playlistName(playlist))
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Text(localizationViewModel.songsCountText(playlist.songIDs.count))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: playlistViewModel.containsSong(song.id, in: playlist.id) ? "checkmark.circle.fill" : "plus.circle.fill")
+                                .foregroundStyle(playlistViewModel.containsSong(song.id, in: playlist.id) ? .green : .secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .safeAreaPadding(.bottom, 90)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle(localizationViewModel.t("playlist.add.to"))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Button {
+                    dismiss()
+                    onCreatePlaylist()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus")
+                        Text(localizationViewModel.t("playlist.new"))
+                    }
+                    .font(.headline)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(Color.green, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 12)
             }
         }
     }

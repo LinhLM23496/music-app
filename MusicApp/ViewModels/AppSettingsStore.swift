@@ -6,24 +6,28 @@ struct PlaybackSnapshot: Codable {
     let titleEN: String
     let localFilePath: String?
     let positionSeconds: Double
+    let playlistID: UUID?
 
     private enum CodingKeys: String, CodingKey {
         case audioFileName
         case titleEN
         case localFilePath
         case positionSeconds
+        case playlistID
     }
 
     init(
         audioFileName: String,
         titleEN: String,
         localFilePath: String?,
-        positionSeconds: Double
+        positionSeconds: Double,
+        playlistID: UUID?
     ) {
         self.audioFileName = audioFileName
         self.titleEN = titleEN
         self.localFilePath = localFilePath
         self.positionSeconds = positionSeconds
+        self.playlistID = playlistID
     }
 
     init(from decoder: Decoder) throws {
@@ -32,6 +36,7 @@ struct PlaybackSnapshot: Codable {
         titleEN = try container.decodeIfPresent(String.self, forKey: .titleEN) ?? ""
         localFilePath = try container.decodeIfPresent(String.self, forKey: .localFilePath)
         positionSeconds = try container.decodeIfPresent(Double.self, forKey: .positionSeconds) ?? 0
+        playlistID = try container.decodeIfPresent(UUID.self, forKey: .playlistID)
     }
 }
 

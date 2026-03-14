@@ -16,7 +16,9 @@
 "playlist.create.button" = "Tạo";
 "playlist.add.song" = "Thêm Bài";
 "playlist.add.songs" = "Thêm Bài Hát";
+"playlist.add.to" = "Thêm vào Playlist";
 "playlist.add.song.success" = "Đã thêm vào playlist.";
+"playlist.create.and.add.success" = "Đã tạo playlist và thêm bài hát.";
 "playlist.remove.song" = "Xóa";
 "playlist.remove.song.success" = "Đã xóa khỏi playlist.";
 "playlist.delete.confirm.title" = "Xóa playlist này?";

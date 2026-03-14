@@ -13,6 +13,7 @@ protocol LibraryPlaybackDataProviding {
     var language: AppLanguage { get }
     var languagePublisher: AnyPublisher<AppLanguage, Never> { get }
     func localized(_ key: String) -> String
+    func playlist(id: UUID) -> Playlist?
 }
 
 @MainActor
@@ -64,6 +65,7 @@ final class PlayerViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var activeSong: Song?
+    private var currentPlaylistID: UUID?
     private var didPerformInitialActivationWork = false
     private var lastPersistedSnapshotSecond: Int = -1
     private var pendingRestorePositionSeconds: Double?
@@ -149,16 +151,20 @@ final class PlayerViewModel: ObservableObject {
             return
         }
         let autoQueue = libraryUseCases.suggestedQueue(for: song, songs: librarySongs, importedSongs: importedSongs)
-        startPlayback(song: song, in: autoQueue)
+        startPlayback(song: song, in: autoQueue, playlistID: nil)
     }
 
     func play(song: Song, in queue: [Song]) {
-        startPlayback(song: song, in: queue)
+        startPlayback(song: song, in: queue, playlistID: nil)
+    }
+
+    func play(song: Song, in queue: [Song], playlistID: UUID?) {
+        startPlayback(song: song, in: queue, playlistID: playlistID)
     }
 
     func playFromQueue(index: Int) {
         guard let song = queueStore.song(at: index) else { return }
-        startPlayback(song: song, in: queueStore.queueSongs)
+        startPlayback(song: song, in: queueStore.queueSongs, playlistID: currentPlaylistID)
     }
 
     func togglePlayPause() {
@@ -187,7 +193,7 @@ final class PlayerViewModel: ObservableObject {
         case .seekToStart:
             seek(to: 0)
         case .play(let song):
-            startPlayback(song: song, in: queueStore.queueSongs)
+            startPlayback(song: song, in: queueStore.queueSongs, playlistID: currentPlaylistID)
         case .none:
             break
         }
@@ -292,7 +298,7 @@ final class PlayerViewModel: ObservableObject {
         libraryDataSource.language
     }
 
-    private func startPlayback(song: Song, in queue: [Song]) {
+    private func startPlayback(song: Song, in queue: [Song], playlistID: UUID?) {
         if resumeIfCurrentSong(song) {
             return
         }
@@ -301,6 +307,7 @@ final class PlayerViewModel: ObservableObject {
         pendingRestorePositionSeconds = nil
 
         let selectedSong = queueStore.setQueue(current: song, in: queue, isSameTrack: isSameTrack)
+        currentPlaylistID = playlistID
         activeSong = selectedSong
         currentSongID = selectedSong.id
         hasPlaybackSession = true
@@ -337,6 +344,7 @@ final class PlayerViewModel: ObservableObject {
         cancelSleepTimer()
         playbackController.stopAndClear()
         activeSong = nil
+        currentPlaylistID = nil
         currentSongID = nil
         hasPlaybackSession = false
         isMiniPlayerHidden = false
@@ -404,20 +412,21 @@ final class PlayerViewModel: ObservableObject {
 
     private func persistPlaybackSnapshotForCurrentTrack(position: Double? = nil) {
         let snapshotPosition = max(position ?? playbackProgress.currentTime, 0)
-        snapshotStore.save(song: currentSong, position: snapshotPosition)
+        snapshotStore.save(song: currentSong, position: snapshotPosition, playlistID: currentPlaylistID)
     }
 
     private func restorePlaybackSnapshotIfAvailable() {
         guard let snapshot = snapshotStore.load() else { return }
         guard let restoredSong = resolveSong(for: snapshot) else { return }
 
-        let restoredQueue = libraryUseCases.suggestedQueue(for: restoredSong, songs: librarySongs, importedSongs: importedSongs)
+        let restoredQueue = queueForSnapshot(song: restoredSong, snapshot: snapshot)
         let selectedSong = queueStore.setQueue(current: restoredSong, in: restoredQueue, isSameTrack: isSameTrack)
         guard audioURL(for: selectedSong) != nil else {
             snapshotStore.clear()
             return
         }
 
+        currentPlaylistID = snapshot.playlistID
         activeSong = selectedSong
         currentSongID = selectedSong.id
         hasPlaybackSession = true
@@ -463,7 +472,7 @@ final class PlayerViewModel: ObservableObject {
     private func advanceToNext(autoTriggered: Bool) {
         switch queueStore.nextAction(autoTriggered: autoTriggered) {
         case .play(let song):
-            startPlayback(song: song, in: queueStore.queueSongs)
+            startPlayback(song: song, in: queueStore.queueSongs, playlistID: currentPlaylistID)
         case .stopAtEnd:
             playbackController.stopAtEnd()
         }
@@ -657,9 +666,10 @@ final class PlayerViewModel: ObservableObject {
         guard let savedSong = resolveSong(for: snapshot) else { return false }
         guard audioURL(for: savedSong) != nil else { return false }
 
-        let restoredQueue = libraryUseCases.suggestedQueue(for: savedSong, songs: librarySongs, importedSongs: importedSongs)
+        let restoredQueue = queueForSnapshot(song: savedSong, snapshot: snapshot)
         let selectedSong = queueStore.setQueue(current: savedSong, in: restoredQueue, isSameTrack: isSameTrack)
 
+        currentPlaylistID = snapshot.playlistID
         activeSong = selectedSong
         currentSongID = selectedSong.id
         hasPlaybackSession = true
@@ -681,6 +691,26 @@ final class PlayerViewModel: ObservableObject {
     private func randomPlayableSong() -> Song? {
         let mergedSongs = importedSongs + librarySongs
         return mergedSongs.shuffled().first(where: { audioURL(for: $0) != nil })
+    }
+
+    private func queueForSnapshot(song: Song, snapshot: PlaybackSnapshot) -> [Song] {
+        if let playlistID = snapshot.playlistID,
+           let playlistSongs = playlistQueueSongs(for: playlistID),
+           playlistSongs.contains(where: { isSameTrack($0, song) }) {
+            return playlistSongs
+        }
+
+        return libraryUseCases.suggestedQueue(for: song, songs: librarySongs, importedSongs: importedSongs)
+    }
+
+    private func playlistQueueSongs(for playlistID: UUID) -> [Song]? {
+        guard let playlist = libraryDataSource.playlist(id: playlistID) else { return nil }
+        let allAvailableSongs = librarySongs + importedSongs.filter { imported in
+            !librarySongs.contains(where: { $0.id == imported.id })
+        }
+        let songMap = Dictionary(uniqueKeysWithValues: allAvailableSongs.map { ($0.id, $0) })
+        let songs = playlist.songIDs.compactMap { songMap[$0] }
+        return songs.isEmpty ? nil : songs
     }
 
     private func applyPendingRestorePositionIfNeeded() {

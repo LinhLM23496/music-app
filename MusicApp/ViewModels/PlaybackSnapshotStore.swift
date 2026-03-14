@@ -7,7 +7,7 @@ final class PlaybackSnapshotStore {
         self.settingsStore = settingsStore
     }
 
-    func save(song: Song?, position: Double) {
+    func save(song: Song?, position: Double, playlistID: UUID?) {
         guard let song else { return }
 
         settingsStore.savePlaybackSnapshot(
@@ -15,7 +15,8 @@ final class PlaybackSnapshotStore {
                 audioFileName: song.audioFileName,
                 titleEN: song.titleEN,
                 localFilePath: song.localFilePath,
-                positionSeconds: max(position, 0)
+                positionSeconds: max(position, 0),
+                playlistID: playlistID
             )
         )
     }

@@ -38,7 +38,7 @@ struct PlaylistDetailView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        playerViewModel.play(song: song, in: playlistSongs)
+                        playerViewModel.play(song: song, in: playlistSongs, playlistID: playlistID)
                         playerViewModel.presentPlayer(for: song)
                     }
                     .listRowBackground(Color.clear)
@@ -67,7 +67,7 @@ struct PlaylistDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if let firstSong = playlistSongs.first {
                 Button {
-                    playerViewModel.play(song: firstSong, in: playlistSongs)
+                    playerViewModel.play(song: firstSong, in: playlistSongs, playlistID: playlistID)
                     playerViewModel.presentPlayer(for: firstSong)
                 } label: {
                     Image(systemName: "play.fill")
