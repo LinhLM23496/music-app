@@ -11,11 +11,19 @@
 "playlist.new" = "Mới";
 "playlist.create" = "Tạo Playlist";
 "playlist.name" = "Tên Playlist";
+"playlist.play" = "Phát Playlist";
 "playlist.cancel" = "Hủy";
 "playlist.create.button" = "Tạo";
 "playlist.add.song" = "Thêm Bài";
 "playlist.add.songs" = "Thêm Bài Hát";
+"playlist.add.to" = "Thêm vào Playlist";
 "playlist.add.song.success" = "Đã thêm vào playlist.";
+"playlist.create.and.add.success" = "Đã tạo playlist và thêm bài hát.";
+"playlist.remove.song" = "Xóa";
+"playlist.remove.song.success" = "Đã xóa khỏi playlist.";
+"playlist.delete.confirm.title" = "Xóa playlist này?";
+"playlist.delete.confirm.message" = "Playlist này sẽ bị xóa khỏi thư viện của bạn.";
+"playlist.delete.confirm.button" = "Xóa";
 "playlist.no.songs" = "Chưa có bài hát";
 
 "common.done" = "Xong";

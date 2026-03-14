@@ -40,6 +40,19 @@ struct PlaylistUseCases {
         return next
     }
 
+    func removeSong(_ song: Song, from playlistID: UUID, in playlists: [Playlist]) -> [Playlist] {
+        guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else {
+            return playlists
+        }
+
+        var next = playlists
+        next[playlistIndex].songIDs.removeAll { $0 == song.id }
+        if next[playlistIndex].songIDs.isEmpty {
+            next[playlistIndex].coverSymbol = "music.note.list"
+        }
+        return next
+    }
+
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {
         let map = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.id, $0) })
         return playlist.songIDs.compactMap { map[$0] }

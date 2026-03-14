@@ -23,6 +23,7 @@ struct ContentView: View {
         let playerDataSource = PlayerLibraryDataSource(
             libraryViewModel: libraryViewModel,
             importViewModel: importViewModel,
+            playlistViewModel: playlistViewModel,
             settingsStore: settings,
             localizationService: BundleLocalizationService()
         )
@@ -99,7 +100,9 @@ struct ContentView: View {
         }
         .sheet(item: $playerViewModel.playerSheetSong) { song in
             MusicPlayerView(song: song, controller: playerViewModel)
+                .environmentObject(localizationViewModel)
                 .environmentObject(libraryViewModel)
+                .environmentObject(playlistViewModel)
         }
     }
 }

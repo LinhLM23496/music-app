@@ -11,11 +11,19 @@
 "playlist.new" = "New";
 "playlist.create" = "Create Playlist";
 "playlist.name" = "Playlist Name";
+"playlist.play" = "Play Playlist";
 "playlist.cancel" = "Cancel";
 "playlist.create.button" = "Create";
 "playlist.add.song" = "Add Song";
 "playlist.add.songs" = "Add Songs";
+"playlist.add.to" = "Add to Playlist";
 "playlist.add.song.success" = "Added to playlist.";
+"playlist.create.and.add.success" = "Created playlist and added song.";
+"playlist.remove.song" = "Remove";
+"playlist.remove.song.success" = "Removed from playlist.";
+"playlist.delete.confirm.title" = "Delete playlist?";
+"playlist.delete.confirm.message" = "This playlist will be removed from your library.";
+"playlist.delete.confirm.button" = "Delete";
 "playlist.no.songs" = "No songs yet";
 
 "common.done" = "Done";
