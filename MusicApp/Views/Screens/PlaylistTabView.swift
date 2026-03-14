@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct PlaylistTabView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
@@ -14,13 +15,7 @@ struct PlaylistTabView: View {
     @State private var playlistPendingDeletion: Playlist?
     @State private var toastMessage: String?
     @State private var toastWorkItem: DispatchWorkItem?
-
-    private var allSongs: [Song] {
-        var combined = libraryViewModel.tracks
-        let existingIDs = Set(combined.map(\.id))
-        combined.append(contentsOf: importViewModel.importedSongs.filter { !existingIDs.contains($0.id) })
-        return combined
-    }
+    @State private var allSongs: [Song] = []
 
     var body: some View {
         NavigationStack {
@@ -120,6 +115,17 @@ struct PlaylistTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: toastMessage != nil)
+        .onAppear {
+            refreshAllSongs()
+        }
+        .onReceive(
+            Publishers.CombineLatest(
+                libraryViewModel.$tracks,
+                importViewModel.$importedTracks
+            )
+        ) { _, _ in
+            refreshAllSongs()
+        }
     }
 
     private func playlistRow(_ playlist: Playlist) -> some View {
@@ -174,6 +180,13 @@ struct PlaylistTabView: View {
         }
         toastWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: workItem)
+    }
+
+    private func refreshAllSongs() {
+        var combined = libraryViewModel.tracks
+        let existingIDs = Set(combined.map(\.id))
+        combined.append(contentsOf: importViewModel.importedSongs.filter { !existingIDs.contains($0.id) })
+        allSongs = combined
     }
 }
 

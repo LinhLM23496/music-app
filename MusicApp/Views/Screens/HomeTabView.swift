@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Combine
 
 struct HomeTabView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
@@ -9,12 +10,7 @@ struct HomeTabView: View {
     @State private var showImporter = false
     @State private var importToast: String?
     @State private var importToastWorkItem: DispatchWorkItem?
-
-    private var favoriteSongs: [Song] {
-        let libraryFavorites = libraryViewModel.tracks.filter { libraryViewModel.favoriteIDs.contains($0.id) }
-        let importedFavorites = importViewModel.importedSongs.filter { libraryViewModel.favoriteIDs.contains($0.id) }
-        return libraryFavorites + importedFavorites
-    }
+    @State private var favoriteSongs: [Song] = []
 
     var body: some View {
         NavigationStack {
@@ -151,6 +147,18 @@ struct HomeTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: importToast != nil)
+        .onAppear {
+            refreshFavoriteSongs()
+        }
+        .onReceive(
+            Publishers.CombineLatest3(
+                libraryViewModel.$tracks,
+                libraryViewModel.$favoriteIDs,
+                importViewModel.$importedTracks
+            )
+        ) { _, _, _ in
+            refreshFavoriteSongs()
+        }
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -168,5 +176,17 @@ struct HomeTabView: View {
         }
         importToastWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: workItem)
+    }
+
+    private func refreshFavoriteSongs() {
+        let favoriteIDs = libraryViewModel.favoriteIDs
+        guard !favoriteIDs.isEmpty else {
+            favoriteSongs = []
+            return
+        }
+
+        let libraryFavorites = libraryViewModel.tracks.filter { favoriteIDs.contains($0.id) }
+        let importedFavorites = importViewModel.importedSongs.filter { favoriteIDs.contains($0.id) }
+        favoriteSongs = libraryFavorites + importedFavorites
     }
 }
