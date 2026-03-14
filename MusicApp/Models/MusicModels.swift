@@ -54,7 +54,7 @@ struct LocalAudioTrack: Identifiable, Hashable {
     let duration: Double
 }
 
-enum RepeatMode: String, CaseIterable {
+enum RepeatMode: String, CaseIterable, Codable {
     case off
     case all
     case one

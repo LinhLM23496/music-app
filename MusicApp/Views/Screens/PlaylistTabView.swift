@@ -6,7 +6,7 @@ struct PlaylistTabView: View {
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @EnvironmentObject private var importViewModel: ImportViewModel
-    @EnvironmentObject private var playerViewModel: PlayerViewModel
+    @EnvironmentObject private var playerCoordinator: PlayerCoordinator
 
     @State private var showingCreatePlaylist = false
     @State private var newPlaylistName = ""
@@ -53,7 +53,7 @@ struct PlaylistTabView: View {
                 .environmentObject(localizationViewModel)
                 .environmentObject(playlistViewModel)
                 .environmentObject(libraryViewModel)
-                .environmentObject(playerViewModel)
+                .environmentObject(playerCoordinator)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

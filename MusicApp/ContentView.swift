@@ -8,7 +8,7 @@ struct ContentView: View {
     @StateObject private var playlistViewModel: PlaylistViewModel
     @StateObject private var authViewModel: AuthViewModel
     @StateObject private var libraryViewModel: LibraryViewModel
-    @StateObject private var playerViewModel: PlayerViewModel
+    @StateObject private var playerCoordinator: PlayerCoordinator
 
     init() {
         let container = AppContainer.shared
@@ -20,20 +20,34 @@ struct ContentView: View {
         let libraryViewModel = container.makeLibraryViewModel()
         let importViewModel = ImportViewModel(settingsStore: settings)
         let playlistViewModel = container.makePlaylistViewModel()
-        let playerDataSource = PlayerLibraryDataSource(
-            libraryViewModel: libraryViewModel,
-            importViewModel: importViewModel,
-            playlistViewModel: playlistViewModel,
-            settingsStore: settings,
-            localizationService: BundleLocalizationService()
+        let playerSessionStore = PlayerSessionStore()
+        let playerPresentationStore = PlayerPresentationStore()
+
+        let trackResolver = DefaultTrackResolver(
+            librarySongsProvider: { libraryViewModel.tracks },
+            importedSongsProvider: { importViewModel.importedSongs }
         )
+
+        let playerPersistence = UserDefaultsPlayerPersistence()
+        let playbackEngine = AVPlaybackEngine()
+
+        let playerCoordinator = PlayerCoordinator(
+            engine: playbackEngine,
+            sessionStore: playerSessionStore,
+            playerPresentationStore: playerPresentationStore,
+            playerPersistence: playerPersistence,
+            trackResolver: trackResolver,
+            nowPlayingService: SystemNowPlayingService()
+        )
+
+        _playerCoordinator = StateObject(wrappedValue: playerCoordinator)
+
         _settingsStore = StateObject(wrappedValue: settings)
         _localizationViewModel = StateObject(wrappedValue: localizationViewModel)
         _importViewModel = StateObject(wrappedValue: importViewModel)
         _playlistViewModel = StateObject(wrappedValue: playlistViewModel)
         _authViewModel = StateObject(wrappedValue: container.makeAuthViewModel())
         _libraryViewModel = StateObject(wrappedValue: libraryViewModel)
-        _playerViewModel = StateObject(wrappedValue: container.makePlayerViewModel(libraryDataSource: playerDataSource))
     }
 
     var body: some View {
@@ -54,17 +68,19 @@ struct ContentView: View {
                 }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playerViewModel.shouldShowMiniPlayer, let currentSong = playerViewModel.currentSong {
+            if playerCoordinator.shouldShowMiniPlayer, let currentSong = playerCoordinator.currentSong {
                 MiniPlayerBarView(
                     song: currentSong,
-                    title: playerViewModel.localizedSongTitle(currentSong),
-                    isPlaying: playerViewModel.isPlaying,
-                    playbackProgress: playerViewModel.playbackProgress,
-                    onTogglePlayPause: { playerViewModel.togglePlayPause() },
-                    onNext: { playerViewModel.nextSong() },
-                    onHide: { playerViewModel.hideMiniPlayer() },
-                    onStop: { playerViewModel.stopAndResetPlayback() },
-                    onOpen: { playerViewModel.presentPlayer(for: currentSong) }
+                    title: currentSong.localizedTitle(for: settingsStore.language),
+                    isPlaying: playerCoordinator.playbackState.isPlaying,
+                    currentTime: playerCoordinator.playbackState.currentTime,
+                    duration: playerCoordinator.playbackState.duration,
+                    progress: playerCoordinator.playbackState.progress,
+                    onTogglePlayPause: { playerCoordinator.togglePlayPause() },
+                    onNext: { playerCoordinator.next() },
+                    onHide: { playerCoordinator.hideMiniPlayer() },
+                    onStop: { playerCoordinator.stop() },
+                    onOpen: { playerCoordinator.presentPlayer(for: currentSong.id) }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -78,11 +94,11 @@ struct ContentView: View {
         .environmentObject(settingsStore)
         .environmentObject(authViewModel)
         .environmentObject(libraryViewModel)
-        .environmentObject(playerViewModel)
+        .environmentObject(playerCoordinator)
         .task {
             if scenePhase == .active {
                 DispatchQueue.main.async {
-                    playerViewModel.handleSceneDidBecomeActive()
+                    playerCoordinator.restoreSnapshotIfNeeded()
                 }
             }
 
@@ -90,19 +106,27 @@ struct ContentView: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 DispatchQueue.main.async {
-                    playerViewModel.handleSceneDidBecomeActive()
+                    playerCoordinator.restoreSnapshotIfNeeded()
                 }
             } else if newPhase == .inactive || newPhase == .background {
                 DispatchQueue.main.async {
-                    playerViewModel.savePlaybackSnapshotNow()
+                    playerCoordinator.saveSnapshot()
                 }
             }
         }
-        .sheet(item: $playerViewModel.playerSheetSong) { song in
-            MusicPlayerView(song: song, controller: playerViewModel)
-                .environmentObject(localizationViewModel)
-                .environmentObject(libraryViewModel)
-                .environmentObject(playlistViewModel)
+        .sheet(
+            isPresented: Binding(
+                get: { playerCoordinator.presentedTrackID != nil },
+                set: { if !$0 { playerCoordinator.dismissPlayer() } }
+            )
+        ) {
+            if let song = playerCoordinator.presentedSong {
+                MusicPlayerView(song: song)
+                    .environmentObject(playerCoordinator)
+                    .environmentObject(localizationViewModel)
+                    .environmentObject(libraryViewModel)
+                    .environmentObject(playlistViewModel)
+            }
         }
     }
 }

@@ -4,7 +4,9 @@ struct MiniPlayerBarView: View {
     let song: Song
     let title: String
     let isPlaying: Bool
-    let playbackProgress: PlaybackProgressState
+    let currentTime: Float
+    let duration: Float
+    let progress: Float
     let onTogglePlayPause: () -> Void
     let onNext: () -> Void
     let onHide: () -> Void
@@ -88,7 +90,7 @@ struct MiniPlayerBarView: View {
             .padding(.top, 10)
             .padding(.bottom, 8)
 
-            MiniPlayerProgressBar(state: playbackProgress)
+            MiniPlayerProgressBar(progress: progress)
             .padding(.horizontal, 12)
             .frame(height: 2)
         }
@@ -159,10 +161,10 @@ struct MiniPlayerBarView: View {
 }
 
 private struct MiniPlayerProgressBar: View {
-    @ObservedObject var state: PlaybackProgressState
+    let progress: Float
 
     private var clampedProgress: Double {
-        min(max(state.progress, 0), 1)
+        Double(min(max(progress, 0), 1))
     }
 
     var body: some View {

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 
+@MainActor
 protocol LibraryCatalogDataProviding: AnyObject {
     var tracks: [Song] { get }
     var tracksPublisher: AnyPublisher<[Song], Never> { get }

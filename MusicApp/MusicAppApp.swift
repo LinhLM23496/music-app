@@ -6,54 +6,6 @@
 //
 
 import SwiftUI
-import Combine
-
-@MainActor
-final class PlayerLibraryDataSource: LibraryPlaybackDataProviding {
-    private let libraryViewModel: LibraryViewModel
-    private let importViewModel: ImportViewModel
-    private let playlistViewModel: PlaylistViewModel
-    private let settingsStore: AppSettingsStore
-    private let localizationService: LocalizationProviding
-
-    init(
-        libraryViewModel: LibraryViewModel,
-        importViewModel: ImportViewModel,
-        playlistViewModel: PlaylistViewModel,
-        settingsStore: AppSettingsStore,
-        localizationService: LocalizationProviding
-    ) {
-        self.libraryViewModel = libraryViewModel
-        self.importViewModel = importViewModel
-        self.playlistViewModel = playlistViewModel
-        self.settingsStore = settingsStore
-        self.localizationService = localizationService
-    }
-
-    var songs: [Song] {
-        libraryViewModel.tracks
-    }
-
-    var importedSongs: [Song] {
-        importViewModel.importedSongs
-    }
-
-    var language: AppLanguage {
-        settingsStore.language
-    }
-
-    var languagePublisher: AnyPublisher<AppLanguage, Never> {
-        settingsStore.$language.eraseToAnyPublisher()
-    }
-
-    func localized(_ key: String) -> String {
-        localizationService.string(key, language: settingsStore.language)
-    }
-
-    func playlist(id: UUID) -> Playlist? {
-        playlistViewModel.playlist(id: id)
-    }
-}
 
 @MainActor
 final class AppContainer {
@@ -90,14 +42,6 @@ final class AppContainer {
 
     func makePlaylistViewModel() -> PlaylistViewModel {
         PlaylistViewModel(playlistRepository: playlistRepository)
-    }
-
-    func makePlayerViewModel(libraryDataSource: LibraryPlaybackDataProviding) -> PlayerViewModel {
-        PlayerViewModel(
-            settingsStore: .shared,
-            libraryDataSource: libraryDataSource,
-            nowPlayingService: SystemNowPlayingService()
-        )
     }
 }
 

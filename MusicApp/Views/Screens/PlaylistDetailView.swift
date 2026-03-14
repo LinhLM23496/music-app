@@ -9,7 +9,7 @@ struct PlaylistDetailView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
-    @EnvironmentObject private var playerViewModel: PlayerViewModel
+    @EnvironmentObject private var playerCoordinator: PlayerCoordinator
     @Environment(\.editMode) private var editMode
 
     @State private var showingRenamePlaylist = false
@@ -43,8 +43,12 @@ struct PlaylistDetailView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         guard !(editMode?.wrappedValue.isEditing ?? false) else { return }
-                        playerViewModel.play(song: song, in: playlistSongs, playlistID: playlistID)
-                        playerViewModel.presentPlayer(for: song)
+                        playerCoordinator.play(
+                            trackID: song.id,
+                            queueTrackIDs: playlistSongs.map(\.id),
+                            source: .playlist(playlistID)
+                        )
+                        playerCoordinator.presentPlayer(for: song.id)
                     }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -84,8 +88,12 @@ struct PlaylistDetailView: View {
         .overlay(alignment: .bottomTrailing) {
             if let firstSong = playlistSongs.first {
                 Button {
-                    playerViewModel.play(song: firstSong, in: playlistSongs, playlistID: playlistID)
-                    playerViewModel.presentPlayer(for: firstSong)
+                    playerCoordinator.play(
+                        trackID: firstSong.id,
+                        queueTrackIDs: playlistSongs.map(\.id),
+                        source: .playlist(playlistID)
+                    )
+                    playerCoordinator.presentPlayer(for: firstSong.id)
                 } label: {
                     Image(systemName: "play.fill")
                         .font(.title2.weight(.bold))

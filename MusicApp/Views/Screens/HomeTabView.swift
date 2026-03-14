@@ -6,7 +6,7 @@ struct HomeTabView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var importViewModel: ImportViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
-    @EnvironmentObject private var playerViewModel: PlayerViewModel
+    @EnvironmentObject private var playerCoordinator: PlayerCoordinator
     @State private var showImporter = false
     @State private var importToast: String?
     @State private var importToastWorkItem: DispatchWorkItem?
@@ -22,8 +22,12 @@ struct HomeTabView: View {
                         HStack(spacing: 14) {
                             ForEach(libraryViewModel.featuredTracks) { song in
                                 Button {
-                                    playerViewModel.play(song: song)
-                                    playerViewModel.presentPlayer(for: song)
+                                    playerCoordinator.play(
+                                        trackID: song.id,
+                                        queueTrackIDs: libraryViewModel.featuredTracks.map(\.id),
+                                        source: .library
+                                    )
+                                    playerCoordinator.presentPlayer(for: song.id)
                                 } label: {
                                     VStack(alignment: .leading, spacing: 8) {
                                         AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent)
@@ -54,8 +58,12 @@ struct HomeTabView: View {
                         VStack(spacing: 10) {
                             ForEach(favoriteSongs) { song in
                                 Button {
-                                    playerViewModel.play(song: song)
-                                    playerViewModel.presentPlayer(for: song)
+                                    playerCoordinator.play(
+                                        trackID: song.id,
+                                        queueTrackIDs: favoriteSongs.map(\.id),
+                                        source: .favorites
+                                    )
+                                    playerCoordinator.presentPlayer(for: song.id)
                                 } label: {
                                     SongRowView(
                                         song: song,
@@ -88,8 +96,12 @@ struct HomeTabView: View {
                             ForEach(importViewModel.importedTracks) { track in
                                 Button {
                                     let importedSong = importViewModel.songForImportedTrack(track)
-                                    playerViewModel.play(song: importedSong)
-                                    playerViewModel.presentPlayer(for: importedSong)
+                                    playerCoordinator.play(
+                                        trackID: importedSong.id,
+                                        queueTrackIDs: importViewModel.importedSongs.map(\.id),
+                                        source: .imported
+                                    )
+                                    playerCoordinator.presentPlayer(for: importedSong.id)
                                 } label: {
                                     HStack(spacing: 12) {
                                         AlbumArtworkView(symbol: "waveform", accent: .green, cornerRadius: 12)

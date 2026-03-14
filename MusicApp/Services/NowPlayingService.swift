@@ -9,6 +9,7 @@ struct RemotePlaybackCommandHandlers {
     let onChangePosition: (Double) -> Bool
 }
 
+@MainActor
 protocol NowPlayingControlling: AnyObject {
     func configureRemoteCommands(handlers: RemotePlaybackCommandHandlers)
     func updateNowPlaying(
