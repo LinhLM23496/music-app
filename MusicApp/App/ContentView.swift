@@ -144,6 +144,9 @@ private struct MusicPlayerOverlay: View {
     let song: Song
     let heroNamespace: Namespace.ID
     let dismiss: () -> Void
+    
+    @State private var dragOffsetY: CGFloat = 0
+    @State private var isDragging = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -153,6 +156,36 @@ private struct MusicPlayerOverlay: View {
 
             MusicPlayerView(song: song, heroNamespace: heroNamespace, onDismiss: dismiss)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .offset(y: dragOffsetY)
+                .scaleEffect(playerScale, anchor: .top)
+                .gesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { value in
+                            guard value.translation.height > 0 else { return }
+                            isDragging = true
+                            dragOffsetY = value.translation.height
+                        }
+                        .onEnded { value in
+                            let shouldDismiss = value.translation.height > 140 || value.predictedEndTranslation.height > 220
+                            if shouldDismiss {
+                                dismiss()
+                            } else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                                    dragOffsetY = 0
+                                    isDragging = false
+                                }
+                            }
+                        }
+                )
         }
+        .onChange(of: song.id) { _, _ in
+            dragOffsetY = 0
+            isDragging = false
+        }
+    }
+    
+    private var playerScale: CGFloat {
+        let progress = min(max(dragOffsetY / 600, 0), 1)
+        return 1 - (progress * 0.06)
     }
 }

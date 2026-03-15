@@ -54,6 +54,7 @@ struct MusicPlayerView: View {
                         }
                     }
                     .padding(.horizontal, 24)
+                    .padding(.top, 12)
 
                     PlayerArtworkView(
                         song: currentSong,
