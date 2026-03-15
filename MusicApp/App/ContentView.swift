@@ -37,7 +37,26 @@ struct ContentView: View {
             contextStore: playbackContextStore,
             playbackPersistence: playbackPersistence,
             trackResolver: trackResolver,
-            nowPlayingService: SystemNowPlayingService()
+            nowPlayingService: SystemNowPlayingService(),
+            availableTracksProvider: {
+                let librarySongs = libraryViewModel.tracks
+                let importedSongs = importViewModel.importedSongs
+                var combined = librarySongs
+                let existingIDs = Set(combined.map(\.id))
+                combined.append(contentsOf: importedSongs.filter { !existingIDs.contains($0.id) })
+                return combined
+            },
+            favoriteTracksProvider: {
+                let favoriteIDs = libraryViewModel.favoriteIDs
+                guard !favoriteIDs.isEmpty else { return [] }
+
+                let libraryFavorites = libraryViewModel.tracks.filter { favoriteIDs.contains($0.id) }
+                let importedFavorites = importViewModel.importedSongs.filter { favoriteIDs.contains($0.id) }
+                var combined = libraryFavorites
+                let existingIDs = Set(combined.map(\.id))
+                combined.append(contentsOf: importedFavorites.filter { !existingIDs.contains($0.id) })
+                return combined
+            }
         )
 
         _playbackController = StateObject(wrappedValue: playbackController)
@@ -144,6 +163,9 @@ private struct MusicPlayerOverlay: View {
     let song: Song
     let heroNamespace: Namespace.ID
     let dismiss: () -> Void
+    
+    @State private var dragOffsetY: CGFloat = 0
+    @State private var isDragging = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -153,6 +175,36 @@ private struct MusicPlayerOverlay: View {
 
             MusicPlayerView(song: song, heroNamespace: heroNamespace, onDismiss: dismiss)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .offset(y: dragOffsetY)
+                .scaleEffect(playerScale, anchor: .top)
+                .gesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { value in
+                            guard value.translation.height > 0 else { return }
+                            isDragging = true
+                            dragOffsetY = value.translation.height
+                        }
+                        .onEnded { value in
+                            let shouldDismiss = value.translation.height > 140 || value.predictedEndTranslation.height > 220
+                            if shouldDismiss {
+                                dismiss()
+                            } else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+                                    dragOffsetY = 0
+                                    isDragging = false
+                                }
+                            }
+                        }
+                )
         }
+        .onChange(of: song.id) { _, _ in
+            dragOffsetY = 0
+            isDragging = false
+        }
+    }
+    
+    private var playerScale: CGFloat {
+        let progress = min(max(dragOffsetY / 600, 0), 1)
+        return 1 - (progress * 0.06)
     }
 }
