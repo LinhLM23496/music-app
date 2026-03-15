@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MusicPlayerView: View {
     let song: Song
+    let heroNamespace: Namespace.ID
+    let onDismiss: () -> Void
 
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
@@ -24,119 +26,130 @@ struct MusicPlayerView: View {
     }
 
     var body: some View {
-        ZStack {
-            PlayerBackgroundView(accent: currentSong.accent)
+        GeometryReader { geometry in
+            ZStack {
+                PlayerBackgroundView(accent: currentSong.accent)
 
-            VStack(spacing: 24) {
-                HStack {
-                    Button {
-                        playbackController.dismissPlayer()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.title3.weight(.semibold))
-                    }
-
-                    Spacer()
-
-                    Text(localizationViewModel.t("player.now.playing"))
-                        .font(.headline)
-
-                    Spacer()
-
-                    Button {
-                        showQueueSheet = true
-                    } label: {
-                        Image(systemName: "list.bullet")
-                            .font(.title3.weight(.semibold))
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-                PlayerArtworkView(song: currentSong, isPlaying: playbackController.playerState.isPlaying)
-
-                NowPlayingInfoView(
-                    song: currentSong,
-                    language: language,
-                    isFavorite: libraryViewModel.favoriteIDs.contains(currentSong.id),
-                    onToggleFavorite: { libraryViewModel.toggleFavorite(songID: currentSong.id) },
-                    onAddToPlaylist: { showPlaylistSheet = true }
-                )
-                .padding(.horizontal, 24)
-
-                PlaybackProgressSection(
-                    currentTime: playbackController.playerState.currentTime,
-                    duration: shownDuration,
-                    progress: playbackController.playerState.progress,
-                    onSeek: { playbackController.seek(to: $0) }
-                )
-                .padding(.horizontal, 24)
-
-                HStack(spacing: 26) {
-                    Button {
-                        playbackController.toggleShuffle()
-                    } label: {
-                        Image(systemName: "shuffle")
-                            .foregroundStyle(playbackController.shuffleEnabled ? .green : .white)
-                    }
-
-                    Button {
-                        playbackController.previous()
-                    } label: {
-                        Image(systemName: "backward.fill")
-                            .font(.title)
-                    }
-
-                    Button {
-                        playbackController.togglePlayPause()
-                    } label: {
-                        Image(systemName: playbackController.playerState.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                            .font(.system(size: 72))
-                            .foregroundStyle(.white)
-                    }
-
-                    Button {
-                        playbackController.next()
-                    } label: {
-                        Image(systemName: "forward.fill")
-                            .font(.title)
-                    }
-
-                    Button {
-                        playbackController.cycleRepeatMode()
-                    } label: {
-                        Image(systemName: playbackController.repeatMode.icon)
-                            .foregroundStyle(playbackController.repeatMode == .off ? .white : .green)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Menu {
-                    ForEach([0.75 as Float, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                VStack(spacing: 24) {
+                    HStack {
                         Button {
-                            playbackController.setPlaybackSpeed(speed)
+                            onDismiss()
                         } label: {
-                            if abs(playbackController.playbackSpeed - speed) < 0.001 {
-                                Label(String(format: "%.2fx", speed), systemImage: "checkmark")
-                            } else {
-                                Text(String(format: "%.2fx", speed))
-                            }
+                            Image(systemName: "chevron.down")
+                                .font(.title3.weight(.semibold))
+                        }
+
+                        Spacer()
+
+                        Text(localizationViewModel.t("player.now.playing"))
+                            .font(.headline)
+
+                        Spacer()
+
+                        Button {
+                            showQueueSheet = true
+                        } label: {
+                            Image(systemName: "list.bullet")
+                                .font(.title3.weight(.semibold))
                         }
                     }
-                } label: {
-                    Label(
-                        "\(localizationViewModel.t("player.speed")): \(String(format: "%.2fx", playbackController.playbackSpeed))",
-                        systemImage: "speedometer"
-                    )
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.08), in: Capsule())
-                .font(.subheadline)
+                    .padding(.horizontal, 24)
 
-                Spacer()
+                    PlayerArtworkView(
+                        song: currentSong,
+                        isPlaying: playbackController.playerState.isPlaying,
+                        heroNamespace: heroNamespace
+                    )
+
+                    NowPlayingInfoView(
+                        song: currentSong,
+                        language: language,
+                        heroNamespace: heroNamespace,
+                        isFavorite: libraryViewModel.favoriteIDs.contains(currentSong.id),
+                        onToggleFavorite: { libraryViewModel.toggleFavorite(songID: currentSong.id) },
+                        onAddToPlaylist: { showPlaylistSheet = true }
+                    )
+                    .padding(.horizontal, 24)
+
+                    PlaybackProgressSection(
+                        currentTime: playbackController.playerState.currentTime,
+                        duration: shownDuration,
+                        progress: playbackController.playerState.progress,
+                        onSeek: { playbackController.seek(to: $0) }
+                    )
+                    .padding(.horizontal, 24)
+
+                    HStack(spacing: 26) {
+                        Button {
+                            playbackController.toggleShuffle()
+                        } label: {
+                            Image(systemName: "shuffle")
+                                .foregroundStyle(playbackController.shuffleEnabled ? .green : .white)
+                        }
+
+                        Button {
+                            playbackController.previous()
+                        } label: {
+                            Image(systemName: "backward.fill")
+                                .font(.title)
+                        }
+
+                        Button {
+                            playbackController.togglePlayPause()
+                        } label: {
+                            ZStack {
+                                Image(systemName: playbackController.playerState.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                                    .font(.system(size: 72))
+                                    .foregroundStyle(.white)
+                            }
+                            .frame(width: 72, height: 72)
+                            .matchedGeometryEffect(id: "player.playButton.\(currentSong.id.uuidString)", in: heroNamespace)
+                        }
+
+                        Button {
+                            playbackController.next()
+                        } label: {
+                            Image(systemName: "forward.fill")
+                                .font(.title)
+                        }
+
+                        Button {
+                            playbackController.cycleRepeatMode()
+                        } label: {
+                            Image(systemName: playbackController.repeatMode.icon)
+                                .foregroundStyle(playbackController.repeatMode == .off ? .white : .green)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Menu {
+                        ForEach([0.75 as Float, 1.0, 1.25, 1.5, 2.0], id: \.self) { speed in
+                            Button {
+                                playbackController.setPlaybackSpeed(speed)
+                            } label: {
+                                if abs(playbackController.playbackSpeed - speed) < 0.001 {
+                                    Label(String(format: "%.2fx", speed), systemImage: "checkmark")
+                                } else {
+                                    Text(String(format: "%.2fx", speed))
+                                }
+                            }
+                        }
+                    } label: {
+                        Label(
+                            "\(localizationViewModel.t("player.speed")): \(String(format: "%.2fx", playbackController.playbackSpeed))",
+                            systemImage: "speedometer"
+                        )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.08), in: Capsule())
+                    .font(.subheadline)
+
+                    Spacer()
+                }
+                .padding(.bottom, geometry.safeAreaInsets.bottom + 8)
+                .foregroundStyle(.white)
             }
-            .foregroundStyle(.white)
         }
         .sheet(isPresented: $showQueueSheet) {
             queueSheet
@@ -247,22 +260,31 @@ private struct PlayerBackgroundView: View {
     let accent: Color
 
     var body: some View {
-        LinearGradient(
-            colors: [accent.opacity(0.65), .black, .black],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        ZStack {
+            Color.black
+                .ignoresSafeArea()
+
+            LinearGradient(
+                colors: [accent.opacity(0.65), .black, .black],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        }
     }
 }
 
 private struct PlayerArtworkView: View {
     let song: Song
     let isPlaying: Bool
+    let heroNamespace: Namespace.ID
 
     var body: some View {
-        AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 24)
+        ZStack {
+            AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 24)
+        }
             .frame(width: 300, height: 300)
+            .matchedGeometryEffect(id: "player.artwork.\(song.id.uuidString)", in: heroNamespace)
             .shadow(color: .black.opacity(0.45), radius: 24, x: 0, y: 16)
             .scaleEffect(isPlaying ? 1 : 0.97)
             .animation(.easeInOut(duration: 0.35), value: isPlaying)
@@ -272,6 +294,7 @@ private struct PlayerArtworkView: View {
 private struct NowPlayingInfoView: View {
     let song: Song
     let language: AppLanguage
+    let heroNamespace: Namespace.ID
     let isFavorite: Bool
     let onToggleFavorite: () -> Void
     let onAddToPlaylist: () -> Void
@@ -285,6 +308,8 @@ private struct NowPlayingInfoView: View {
                 Text(song.artist)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .matchedGeometryEffect(id: "player.textBlock.\(song.id.uuidString)", in: heroNamespace)
 
             Spacer()
 

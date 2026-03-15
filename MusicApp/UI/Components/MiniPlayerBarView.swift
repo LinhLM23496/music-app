@@ -7,6 +7,7 @@ struct MiniPlayerBarView: View {
     let currentTime: Float
     let duration: Float
     let progress: Float
+    let heroNamespace: Namespace.ID
     let onTogglePlayPause: () -> Void
     let onNext: () -> Void
     let onHide: () -> Void
@@ -23,8 +24,11 @@ struct MiniPlayerBarView: View {
                 HStack(spacing: 12) {
                     Button(action: handleOpenTap) {
                         HStack(spacing: 12) {
-                            AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 10)
-                                .frame(width: 46, height: 46)
+                            ZStack {
+                                AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 10)
+                            }
+                            .frame(width: 46, height: 46)
+                            .matchedGeometryEffect(id: "player.artwork.\(song.id.uuidString)", in: heroNamespace)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(title)
@@ -37,6 +41,7 @@ struct MiniPlayerBarView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .layoutPriority(1)
+                            .matchedGeometryEffect(id: "player.textBlock.\(song.id.uuidString)", in: heroNamespace)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -46,10 +51,13 @@ struct MiniPlayerBarView: View {
                     .buttonStyle(.plain)
 
                     Button(action: handleTogglePlayPause) {
-                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.title3)
-                            .frame(width: 34, height: 34)
-                            .foregroundStyle(isPlaying ? .yellow : .green)
+                        ZStack {
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                .font(.title3)
+                                .foregroundStyle(isPlaying ? .yellow : .green)
+                        }
+                        .frame(width: 34, height: 34)
+                        .matchedGeometryEffect(id: "player.playButton.\(song.id.uuidString)", in: heroNamespace)
                     }
                     .contentShape(.interaction, Rectangle().inset(by: -12))
                     .buttonStyle(.plain)

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Namespace private var playerHeroNamespace
+    private let playerHeroAnimation = Animation.spring(response: 0.9, dampingFraction: 0.9)
     @StateObject private var settingsStore: AppSettingsStore
     @StateObject private var localizationViewModel: LocalizationViewModel
     @StateObject private var importViewModel: ImportViewModel
@@ -49,41 +51,67 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView {
-            HomeTabView()
-                .tabItem {
-                    Label(localizationViewModel.t("tab.home"), systemImage: "house.fill")
-                }
+        ZStack(alignment: .bottom) {
+            TabView {
+                HomeTabView()
+                    .tabItem {
+                        Label(localizationViewModel.t("tab.home"), systemImage: "house.fill")
+                    }
 
-            PlaylistTabView()
-                .tabItem {
-                    Label(localizationViewModel.t("tab.playlist"), systemImage: "music.note.list")
-                }
+                PlaylistTabView()
+                    .tabItem {
+                        Label(localizationViewModel.t("tab.playlist"), systemImage: "music.note.list")
+                    }
 
-            InfoTabView()
-                .tabItem {
-                    Label(localizationViewModel.t("tab.info"), systemImage: "person.crop.circle")
+                InfoTabView()
+                    .tabItem {
+                        Label(localizationViewModel.t("tab.info"), systemImage: "person.crop.circle")
+                    }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if playbackController.shouldShowMiniPlayer, let currentSong = playbackController.currentSong {
+                    MiniPlayerBarView(
+                        song: currentSong,
+                        title: currentSong.localizedTitle(for: settingsStore.language),
+                        isPlaying: playbackController.playerState.isPlaying,
+                        currentTime: playbackController.playerState.currentTime,
+                        duration: playbackController.playerState.duration,
+                        progress: playbackController.playerState.progress,
+                        heroNamespace: playerHeroNamespace,
+                        onTogglePlayPause: { playbackController.togglePlayPause() },
+                        onNext: { playbackController.next() },
+                        onHide: { playbackController.hideAndCleanMiniPlayer() },
+                        onStop: { playbackController.stop() },
+                        onOpen: {
+                            withAnimation(playerHeroAnimation) {
+                                playbackController.presentPlayer()
+                            }
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 56)
                 }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playbackController.shouldShowMiniPlayer, let currentSong = playbackController.currentSong {
-                MiniPlayerBarView(
-                    song: currentSong,
-                    title: currentSong.localizedTitle(for: settingsStore.language),
-                    isPlaying: playbackController.playerState.isPlaying,
-                    currentTime: playbackController.playerState.currentTime,
-                    duration: playbackController.playerState.duration,
-                    progress: playbackController.playerState.progress,
-                    onTogglePlayPause: { playbackController.togglePlayPause() },
-                    onNext: { playbackController.next() },
-                    onHide: { playbackController.hideAndCleanMiniPlayer() },
-                    onStop: { playbackController.stop() },
-                    onOpen: { playbackController.presentPlayer() }
+            }
+
+            if playbackController.isPlayerSheetVisible, let song = playbackController.currentSong {
+                MusicPlayerOverlay(
+                    song: song,
+                    heroNamespace: playerHeroNamespace,
+                    dismiss: {
+                        withAnimation(playerHeroAnimation) {
+                            playbackController.dismissPlayer()
+                        }
+                    }
                 )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 56)
+                .environmentObject(playbackController)
+                .environmentObject(localizationViewModel)
+                .environmentObject(libraryViewModel)
+                .environmentObject(playlistViewModel)
+                .transition(.asymmetric(insertion: .opacity, removal: .opacity))
+                .zIndex(10)
             }
         }
+        .animation(playerHeroAnimation, value: playbackController.isPlayerSheetVisible)
         .tint(.green)
         .preferredColorScheme(.dark)
         .environmentObject(localizationViewModel)
@@ -109,19 +137,22 @@ struct ContentView: View {
                 }
             }
         }
-        .sheet(
-            isPresented: Binding(
-                get: { playbackController.isPlayerSheetVisible },
-                set: { if !$0 { playbackController.dismissPlayer() } }
-            )
-        ) {
-            if let song = playbackController.currentSong {
-                MusicPlayerView(song: song)
-                    .environmentObject(playbackController)
-                    .environmentObject(localizationViewModel)
-                    .environmentObject(libraryViewModel)
-                    .environmentObject(playlistViewModel)
-            }
+    }
+}
+
+private struct MusicPlayerOverlay: View {
+    let song: Song
+    let heroNamespace: Namespace.ID
+    let dismiss: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.45)
+                .ignoresSafeArea()
+                .onTapGesture(perform: dismiss)
+
+            MusicPlayerView(song: song, heroNamespace: heroNamespace, onDismiss: dismiss)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
     }
 }
