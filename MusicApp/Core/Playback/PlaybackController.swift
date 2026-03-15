@@ -57,7 +57,7 @@ final class PlaybackController: ObservableObject {
     }
 
     var shouldShowMiniPlayer: Bool {
-        currentSong != nil && isMiniPlayerVisible
+        currentSong != nil && isMiniPlayerVisible && !isPlayerSheetVisible
     }
     
     func play(trackID: UUID, queueTrackIDs: [UUID] = [], source: PlaybackSource) {
@@ -275,11 +275,15 @@ final class PlaybackController: ObservableObject {
     }
 
     func presentPlayer() {
+        setMiniPlayerVisible(false)
         setPlayerSheetVisible(true)
     }
 
     func dismissPlayer() {
         setPlayerSheetVisible(false)
+        if currentSong != nil {
+            setMiniPlayerVisible(true)
+        }
     }
     
     func restoreSnapshotIfNeeded() {
