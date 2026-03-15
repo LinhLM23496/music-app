@@ -25,6 +25,8 @@ final class PlaybackController: ObservableObject {
     private let playbackPersistence: PlaybackPersistence
     private let trackResolver: TrackResolver
     private let nowPlayingService: NowPlayingControlling
+    private let nowPlayingAdapter: PlaybackNowPlayingAdapter
+    private var remoteBridge: PlaybackRemoteBridge?
     private let availableTracksProvider: () -> [Song]
     private let favoriteTracksProvider: () -> [Song]
     
@@ -46,10 +48,71 @@ final class PlaybackController: ObservableObject {
         self.playbackPersistence = playbackPersistence
         self.trackResolver = trackResolver
         self.nowPlayingService = nowPlayingService
+        self.nowPlayingAdapter = PlaybackNowPlayingAdapter(service: nowPlayingService)
         self.availableTracksProvider = availableTracksProvider
         self.favoriteTracksProvider = favoriteTracksProvider
+        self.remoteBridge = PlaybackRemoteBridge(
+            service: nowPlayingService,
+            actions: PlaybackRemoteActions(
+                onPlay: { [weak self] in
+                    guard let self else { return false }
+                    if contextStore.session != nil {
+                        play()
+                        return true
+                    }
+                    if let snapshot = playbackPersistence.loadSnapshot(), restore(from: snapshot, autoPlay: true) {
+                        return true
+                    }
+                    let favoriteTracks = favoriteTracksProvider()
+                    if let randomFavorite = favoriteTracks.randomElement() {
+                        play(
+                            trackID: randomFavorite.id,
+                            queueTrackIDs: favoriteTracks.map(\.id),
+                            source: .favorites
+                        )
+                        return true
+                    }
+                    let availableTracks = availableTracksProvider()
+                    if let randomTrack = availableTracks.randomElement() {
+                        play(
+                            trackID: randomTrack.id,
+                            queueTrackIDs: availableTracks.map(\.id),
+                            source: .mixed
+                        )
+                        return true
+                    }
+                    return false
+                },
+                onPause: { [weak self] in
+                    guard let self else { return false }
+                    guard playerState.hasLoadedItem else { return false }
+                    pause()
+                    return true
+                },
+                onNext: { [weak self] in
+                    guard let self else { return false }
+                    guard contextStore.session != nil else { return false }
+                    next()
+                    return true
+                },
+                onPrevious: { [weak self] in
+                    guard let self else { return false }
+                    guard contextStore.session != nil else { return false }
+                    previous()
+                    return true
+                },
+                onSeekToTime: { [weak self] positionTime in
+                    guard let self else { return false }
+                    let duration = max(playerState.duration, 0)
+                    guard duration > 0 else { return false }
+                    let clampedTime = min(max(Float(positionTime), 0), duration)
+                    seek(to: clampedTime / duration)
+                    return true
+                }
+            )
+        )
         
-        configureRemoteCommands()
+        remoteBridge?.configure()
         bindEngine()
         bindSession()
     }
@@ -336,90 +399,11 @@ final class PlaybackController: ObservableObject {
     
     private func refreshNowPlaying() {
         guard let song = currentSong else {
-            nowPlayingService.clearNowPlaying()
+            nowPlayingAdapter.clear()
             return
         }
-        
-        nowPlayingService.updateNowPlaying(
-            title: song.titleEN,
-            artist: song.artist,
-            album: song.album,
-            duration: Double(playerState.duration),
-            elapsedTime: Double(playerState.currentTime),
-            playbackRate: playerState.isPlaying ? 1.0 : 0.0,
-            defaultRate: 1.0
-        )
-    }
-    
-    private func configureRemoteCommands() {
-        nowPlayingService.configureRemoteCommands(
-            handlers: RemotePlaybackCommandHandlers(
-                onPlay: { [weak self] in
-                    guard let self else { return false }
-                    return handleRemotePlay()
-                },
-                onPause: { [weak self] in
-                    guard let self else { return false }
-                    guard playerState.hasLoadedItem else { return false }
-                    pause()
-                    return true
-                },
-                onNext: { [weak self] in
-                    guard let self else { return false }
-                    guard contextStore.session != nil else { return false }
-                    next()
-                    return true
-                },
-                onPrevious: { [weak self] in
-                    guard let self else { return false }
-                    guard contextStore.session != nil else { return false }
-                    previous()
-                    return true
-                },
-                onChangePosition: { [weak self] positionTime in
-                    guard let self else { return false }
-                    let duration = max(playerState.duration, 0)
-                    guard duration > 0 else { return false }
-                    let clampedTime = min(max(Float(positionTime), 0), duration)
-                    let normalizedProgress = clampedTime / duration
-                    seek(to: normalizedProgress)
-                    return true
-                }
-            )
-        )
-    }
-    
-    private func handleRemotePlay() -> Bool {
-        if contextStore.session != nil {
-            play()
-            return true
-        }
 
-        if let snapshot = playbackPersistence.loadSnapshot(), restore(from: snapshot, autoPlay: true) {
-            return true
-        }
-
-        let favoriteTracks = favoriteTracksProvider()
-        if let randomFavorite = favoriteTracks.randomElement() {
-            play(
-                trackID: randomFavorite.id,
-                queueTrackIDs: favoriteTracks.map(\.id),
-                source: .favorites
-            )
-            return true
-        }
-
-        let availableTracks = availableTracksProvider()
-        if let randomTrack = availableTracks.randomElement() {
-            play(
-                trackID: randomTrack.id,
-                queueTrackIDs: availableTracks.map(\.id),
-                source: .mixed
-            )
-            return true
-        }
-
-        return false
+        nowPlayingAdapter.publish(song: song, playerState: playerState)
     }
     
     private func handleTrackDidFinish() {
