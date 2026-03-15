@@ -89,6 +89,7 @@ final class PlaybackController: ObservableObject {
         currentTrackID = trackID
         self.queueTrackIDs = resolvedQueue
         currentIndex = index
+        primePlayerStateForNewTrack(trackID: trackID, isPlaying: true)
         
         playerEngine.load(url: url, autoPlay: true, rate: playbackContext.speed)
     
@@ -234,6 +235,7 @@ final class PlaybackController: ObservableObject {
         currentTrackID = trackID
         queueTrackIDs = context.trackIDs
         currentIndex = index
+        primePlayerStateForNewTrack(trackID: trackID, isPlaying: true)
         
         playerEngine.load(url: url, autoPlay: true, rate: context.speed)
         
@@ -457,6 +459,24 @@ final class PlaybackController: ObservableObject {
         }
 
         return mergedState
+    }
+    
+    private func primePlayerStateForNewTrack(trackID: UUID, isPlaying: Bool) {
+        let fallbackDuration = max(
+            trackResolver.song(for: trackID).map { Float($0.duration) } ?? 0,
+            0
+        )
+
+        let primedState = PlayerState(
+            currentTime: 0,
+            duration: fallbackDuration,
+            progress: 0,
+            isPlaying: isPlaying,
+            hasLoadedItem: true
+        )
+
+        playerState = primedState
+        restoredStateFallback = primedState
     }
 
     private func setMiniPlayerVisible(_ isVisible: Bool) {

@@ -380,27 +380,55 @@ private struct PlaybackProgressSection: View {
     let duration: Float
     let progress: Float
     let onSeek: (Float) -> Void
+    
+    @State private var localProgress: Float
+    @State private var isScrubbing = false
+
+    init(currentTime: Float, duration: Float, progress: Float, onSeek: @escaping (Float) -> Void) {
+        self.currentTime = currentTime
+        self.duration = duration
+        self.progress = progress
+        self.onSeek = onSeek
+        _localProgress = State(initialValue: progress)
+    }
 
     private var sliderBinding: Binding<Float> {
         Binding(
-            get: { progress },
-            set: { onSeek($0) }
+            get: { localProgress },
+            set: { newValue in
+                localProgress = newValue
+                onSeek(newValue)
+            }
         )
     }
 
     var body: some View {
         VStack(spacing: 4) {
-            Slider(value: sliderBinding, in: 0...1)
+            Slider(
+                value: sliderBinding,
+                in: 0...1,
+                onEditingChanged: { editing in
+                    isScrubbing = editing
+                }
+            )
                 .tint(.green)
+                .onChange(of: progress) { _, newValue in
+                    guard !isScrubbing else { return }
+                    localProgress = newValue
+                }
 
             HStack {
-                Text(Self.timeText(seconds: currentTime))
+                Text(Self.timeText(seconds: displayedCurrentTime))
                 Spacer()
                 Text(Self.timeText(seconds: duration))
             }
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+    }
+    
+    private var displayedCurrentTime: Float {
+        duration > 0 ? localProgress * duration : currentTime
     }
 
     private static func timeText(seconds: Float) -> String {
