@@ -3,7 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var playerHeroNamespace
-    private let playerHeroAnimation = Animation.spring(response: 0.9, dampingFraction: 0.9)
+    private let playerHeroAnimation = Animation.spring(response: 0.75, dampingFraction: 0.86)
     @StateObject private var settingsStore: AppSettingsStore
     @StateObject private var localizationViewModel: LocalizationViewModel
     @StateObject private var importViewModel: ImportViewModel
