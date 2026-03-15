@@ -37,7 +37,26 @@ struct ContentView: View {
             contextStore: playbackContextStore,
             playbackPersistence: playbackPersistence,
             trackResolver: trackResolver,
-            nowPlayingService: SystemNowPlayingService()
+            nowPlayingService: SystemNowPlayingService(),
+            availableTracksProvider: {
+                let librarySongs = libraryViewModel.tracks
+                let importedSongs = importViewModel.importedSongs
+                var combined = librarySongs
+                let existingIDs = Set(combined.map(\.id))
+                combined.append(contentsOf: importedSongs.filter { !existingIDs.contains($0.id) })
+                return combined
+            },
+            favoriteTracksProvider: {
+                let favoriteIDs = libraryViewModel.favoriteIDs
+                guard !favoriteIDs.isEmpty else { return [] }
+
+                let libraryFavorites = libraryViewModel.tracks.filter { favoriteIDs.contains($0.id) }
+                let importedFavorites = importViewModel.importedSongs.filter { favoriteIDs.contains($0.id) }
+                var combined = libraryFavorites
+                let existingIDs = Set(combined.map(\.id))
+                combined.append(contentsOf: importedFavorites.filter { !existingIDs.contains($0.id) })
+                return combined
+            }
         )
 
         _playbackController = StateObject(wrappedValue: playbackController)

@@ -25,6 +25,8 @@ final class PlaybackController: ObservableObject {
     private let playbackPersistence: PlaybackPersistence
     private let trackResolver: TrackResolver
     private let nowPlayingService: NowPlayingControlling
+    private let availableTracksProvider: () -> [Song]
+    private let favoriteTracksProvider: () -> [Song]
     
     private var cancellables: Set<AnyCancellable> = []
     private var hasRestoredSnapshot = false
@@ -35,14 +37,19 @@ final class PlaybackController: ObservableObject {
         contextStore: PlaybackContextStore,
         playbackPersistence: PlaybackPersistence,
         trackResolver: TrackResolver,
-        nowPlayingService: NowPlayingControlling
+        nowPlayingService: NowPlayingControlling,
+        availableTracksProvider: @escaping () -> [Song],
+        favoriteTracksProvider: @escaping () -> [Song]
     ) {
         self.playerEngine = playerEngine
         self.contextStore = contextStore
         self.playbackPersistence = playbackPersistence
         self.trackResolver = trackResolver
         self.nowPlayingService = nowPlayingService
+        self.availableTracksProvider = availableTracksProvider
+        self.favoriteTracksProvider = favoriteTracksProvider
         
+        configureRemoteCommands()
         bindEngine()
         bindSession()
     }
@@ -294,47 +301,7 @@ final class PlaybackController: ObservableObject {
         hasRestoredSnapshot = true
         
         guard let snapshot = playbackPersistence.loadSnapshot() else { return }
-        guard let trackID = snapshot.song.trackID else { return }
-        guard let url = trackResolver.audioURL(for: trackID) else { return }
-        
-        let playbackContext = PlaybackContext(
-            trackIDs: snapshot.session.queueTrackIDs,
-            currentIndex: snapshot.session.currentIndex,
-            source: snapshot.session.source ?? .mixed,
-            repeatMode: snapshot.session.repeatMode,
-            shuffleEnabled: snapshot.session.shuffleEnabled,
-            speed: snapshot.session.speed
-        )
-
-        contextStore.setSession(playbackContext)
-
-        currentTrackID = trackID
-        queueTrackIDs = snapshot.session.queueTrackIDs
-        currentIndex = snapshot.session.currentIndex
-        
-        let restoredDuration = max(snapshot.song.positionSeconds, 0)
-        let restoredTime = max(snapshot.state.positionSeconds, 0)
-        let restoredProgress = restoredDuration > 0
-            ? min(max(restoredTime / restoredDuration, 0), 1)
-            : 0
-        let restoredState = PlayerState(
-            currentTime: restoredTime,
-            duration: restoredDuration,
-            progress: restoredProgress,
-            isPlaying: false,
-            hasLoadedItem: true
-        )
-        playerState = restoredState
-        restoredStateFallback = restoredState
-
-        playerEngine.load(url: url, autoPlay: false, rate: snapshot.session.speed)
-
-        if snapshot.state.positionSeconds > 0 {
-            playerEngine.seek(to: snapshot.state.positionSeconds)
-        }
-
-        setMiniPlayerVisible(true)
-        refreshNowPlaying()
+        restore(from: snapshot, autoPlay: snapshot.state.isPlaying)
     }
     
     func saveSnapshot() {
@@ -382,6 +349,77 @@ final class PlaybackController: ObservableObject {
             playbackRate: playerState.isPlaying ? 1.0 : 0.0,
             defaultRate: 1.0
         )
+    }
+    
+    private func configureRemoteCommands() {
+        nowPlayingService.configureRemoteCommands(
+            handlers: RemotePlaybackCommandHandlers(
+                onPlay: { [weak self] in
+                    guard let self else { return false }
+                    return handleRemotePlay()
+                },
+                onPause: { [weak self] in
+                    guard let self else { return false }
+                    guard playerState.hasLoadedItem else { return false }
+                    pause()
+                    return true
+                },
+                onNext: { [weak self] in
+                    guard let self else { return false }
+                    guard contextStore.session != nil else { return false }
+                    next()
+                    return true
+                },
+                onPrevious: { [weak self] in
+                    guard let self else { return false }
+                    guard contextStore.session != nil else { return false }
+                    previous()
+                    return true
+                },
+                onChangePosition: { [weak self] positionTime in
+                    guard let self else { return false }
+                    let duration = max(playerState.duration, 0)
+                    guard duration > 0 else { return false }
+                    let clampedTime = min(max(Float(positionTime), 0), duration)
+                    let normalizedProgress = clampedTime / duration
+                    seek(to: normalizedProgress)
+                    return true
+                }
+            )
+        )
+    }
+    
+    private func handleRemotePlay() -> Bool {
+        if contextStore.session != nil {
+            play()
+            return true
+        }
+
+        if let snapshot = playbackPersistence.loadSnapshot(), restore(from: snapshot, autoPlay: true) {
+            return true
+        }
+
+        let favoriteTracks = favoriteTracksProvider()
+        if let randomFavorite = favoriteTracks.randomElement() {
+            play(
+                trackID: randomFavorite.id,
+                queueTrackIDs: favoriteTracks.map(\.id),
+                source: .favorites
+            )
+            return true
+        }
+
+        let availableTracks = availableTracksProvider()
+        if let randomTrack = availableTracks.randomElement() {
+            play(
+                trackID: randomTrack.id,
+                queueTrackIDs: availableTracks.map(\.id),
+                source: .mixed
+            )
+            return true
+        }
+
+        return false
     }
     
     private func handleTrackDidFinish() {
@@ -439,6 +477,52 @@ final class PlaybackController: ObservableObject {
             self.repeatMode = context?.repeatMode ?? .off
         }
         .store(in: &cancellables)
+    }
+
+    @discardableResult
+    private func restore(from snapshot: PlaybackSnapshot, autoPlay: Bool) -> Bool {
+        guard let trackID = snapshot.song.trackID else { return false }
+        guard let url = trackResolver.audioURL(for: trackID) else { return false }
+
+        let playbackContext = PlaybackContext(
+            trackIDs: snapshot.session.queueTrackIDs,
+            currentIndex: snapshot.session.currentIndex,
+            source: snapshot.session.source ?? .mixed,
+            repeatMode: snapshot.session.repeatMode,
+            shuffleEnabled: snapshot.session.shuffleEnabled,
+            speed: snapshot.session.speed
+        )
+
+        contextStore.setSession(playbackContext)
+
+        currentTrackID = trackID
+        queueTrackIDs = snapshot.session.queueTrackIDs
+        currentIndex = snapshot.session.currentIndex
+
+        let restoredDuration = max(snapshot.song.positionSeconds, 0)
+        let restoredTime = max(snapshot.state.positionSeconds, 0)
+        let restoredProgress = restoredDuration > 0
+            ? min(max(restoredTime / restoredDuration, 0), 1)
+            : 0
+        let restoredState = PlayerState(
+            currentTime: restoredTime,
+            duration: restoredDuration,
+            progress: restoredProgress,
+            isPlaying: autoPlay || snapshot.state.isPlaying,
+            hasLoadedItem: true
+        )
+        playerState = restoredState
+        restoredStateFallback = restoredState
+
+        playerEngine.load(url: url, autoPlay: autoPlay, rate: snapshot.session.speed)
+
+        if snapshot.state.positionSeconds > 0 {
+            playerEngine.seek(to: snapshot.state.positionSeconds)
+        }
+
+        setMiniPlayerVisible(true)
+        refreshNowPlaying()
+        return true
     }
 
     private func mergePlayerState(_ engineState: PlayerState) -> PlayerState {

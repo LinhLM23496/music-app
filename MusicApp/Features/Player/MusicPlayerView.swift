@@ -459,8 +459,15 @@ private struct PlaybackProgressSection: View {
 
     private static func timeText(seconds: Float) -> String {
         let total = Int(seconds)
+        let hour = total / 3600
         let minute = total / 60
         let second = total % 60
+        let minuteInHour = (total % 3600) / 60
+        
+        if hour > 0 {
+            return String(format: "%d:%02d:%02d", hour, minuteInHour, second)
+        }
+        
         return String(format: "%d:%02d", minute, second)
     }
 }
