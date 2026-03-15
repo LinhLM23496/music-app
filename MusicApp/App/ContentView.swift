@@ -94,22 +94,9 @@ struct ContentView: View {
         .environmentObject(libraryViewModel)
         .environmentObject(playbackController)
         .onAppear {
-            logPlaybackPresentationState("onAppear")
             if scenePhase == .active {
                 playbackController.restoreSnapshotIfNeeded()
             }
-        }
-        .onChange(of: playbackController.shouldShowMiniPlayer) { _, _ in
-            logPlaybackPresentationState("shouldShowMiniPlayer")
-        }
-        .onChange(of: playbackController.currentTrackID) { _, _ in
-            logPlaybackPresentationState("currentTrackID")
-        }
-        .onChange(of: playbackController.isPlayerSheetVisible) { _, _ in
-            logPlaybackPresentationState("isPlayerSheetVisible")
-        }
-        .onChange(of: playbackController.playerState.isPlaying) { _, _ in
-            logPlaybackPresentationState("isPlaying")
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -136,24 +123,5 @@ struct ContentView: View {
                     .environmentObject(playlistViewModel)
             }
         }
-    }
-
-    private func logPlaybackPresentationState(_ trigger: String) {
-        let currentSongDescription: String
-        if let song = playbackController.currentSong {
-            currentSongDescription = "\(song.id) | \(song.titleEN)"
-        } else {
-            currentSongDescription = "nil"
-        }
-
-        print(
-            """
-            [ContentView:\(trigger)]
-            shouldShowMiniPlayer=\(playbackController.shouldShowMiniPlayer)
-            currentSong=\(currentSongDescription)
-            isPlayerSheetVisible=\(playbackController.isPlayerSheetVisible)
-            isPlaying=\(playbackController.playerState.isPlaying)
-            """
-        )
     }
 }

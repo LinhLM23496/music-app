@@ -133,40 +133,28 @@ struct MiniPlayerBarView: View {
     }
 
     private func handleOpenTap() {
-        print(
-            "[MiniPlayerBarView:handleOpenTap] isPlaying=\(isPlaying) suppressOpen=\(Date() < suppressOpenUntil) suppressButtons=\(Date() < suppressButtonsUntil)"
-        )
         if Date() < suppressOpenUntil || Date() < suppressButtonsUntil {
-            print("[MiniPlayerBarView:handleOpenTap] blocked")
             return
         }
-        print("[MiniPlayerBarView:handleOpenTap] onOpen")
         onOpen()
     }
 
     private func handleTogglePlayPause() {
-        print(
-            "[MiniPlayerBarView:handleTogglePlayPause] isPlaying=\(isPlaying) suppressButtons=\(Date() < suppressButtonsUntil)"
-        )
         guard Date() >= suppressButtonsUntil else { return }
-        print("[MiniPlayerBarView:handleTogglePlayPause] onTogglePlayPause")
         onTogglePlayPause()
     }
 
     private func handleNext() {
-        print("[MiniPlayerBarView:handleNext] suppressButtons=\(Date() < suppressButtonsUntil)")
         guard Date() >= suppressButtonsUntil else { return }
         onNext()
     }
 
     private func handleStop() {
-        print("[MiniPlayerBarView:handleStop] suppressButtons=\(Date() < suppressButtonsUntil)")
         guard Date() >= suppressButtonsUntil else { return }
         onStop()
     }
 
     private func handleHide() {
-        print("[MiniPlayerBarView:handleHide] suppressButtons=\(Date() < suppressButtonsUntil)")
         guard Date() >= suppressButtonsUntil else { return }
         onHide()
     }

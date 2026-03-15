@@ -28,6 +28,7 @@ final class PlaybackController: ObservableObject {
     
     private var cancellables: Set<AnyCancellable> = []
     private var hasRestoredSnapshot = false
+    private var restoredStateFallback: PlayerState?
     
     init(
         playerEngine: PlayerEngine,
@@ -282,29 +283,45 @@ final class PlaybackController: ObservableObject {
     func restoreSnapshotIfNeeded() {
         guard !hasRestoredSnapshot else { return }
         hasRestoredSnapshot = true
+        
         guard let snapshot = playbackPersistence.loadSnapshot() else { return }
-        guard let trackID = snapshot.trackID else { return }
+        guard let trackID = snapshot.song.trackID else { return }
         guard let url = trackResolver.audioURL(for: trackID) else { return }
-
+        
         let playbackContext = PlaybackContext(
-            trackIDs: snapshot.queueTrackIDs,
-            currentIndex: snapshot.currentIndex,
-            source: snapshot.source ?? .mixed,
-            repeatMode: snapshot.repeatMode,
-            shuffleEnabled: snapshot.shuffleEnabled,
-            speed: snapshot.speed
+            trackIDs: snapshot.session.queueTrackIDs,
+            currentIndex: snapshot.session.currentIndex,
+            source: snapshot.session.source ?? .mixed,
+            repeatMode: snapshot.session.repeatMode,
+            shuffleEnabled: snapshot.session.shuffleEnabled,
+            speed: snapshot.session.speed
         )
 
         contextStore.setSession(playbackContext)
 
         currentTrackID = trackID
-        queueTrackIDs = snapshot.queueTrackIDs
-        currentIndex = snapshot.currentIndex
+        queueTrackIDs = snapshot.session.queueTrackIDs
+        currentIndex = snapshot.session.currentIndex
+        
+        let restoredDuration = max(snapshot.song.positionSeconds, 0)
+        let restoredTime = max(snapshot.state.positionSeconds, 0)
+        let restoredProgress = restoredDuration > 0
+            ? min(max(restoredTime / restoredDuration, 0), 1)
+            : 0
+        let restoredState = PlayerState(
+            currentTime: restoredTime,
+            duration: restoredDuration,
+            progress: restoredProgress,
+            isPlaying: false,
+            hasLoadedItem: true
+        )
+        playerState = restoredState
+        restoredStateFallback = restoredState
 
-        playerEngine.load(url: url, autoPlay: false, rate: snapshot.speed)
+        playerEngine.load(url: url, autoPlay: false, rate: snapshot.session.speed)
 
-        if snapshot.positionSeconds > 0 {
-            playerEngine.seek(to: snapshot.positionSeconds)
+        if snapshot.state.positionSeconds > 0 {
+            playerEngine.seek(to: snapshot.state.positionSeconds)
         }
 
         setMiniPlayerVisible(true)
@@ -315,17 +332,27 @@ final class PlaybackController: ObservableObject {
         guard let context = contextStore.session else { return }
 
         let snapshot = PlaybackSnapshot(
-            trackID: context.currentTrackID,
-            audioFileName: currentSong?.audioFileName,
-            localFilePath: currentSong?.localFilePath,
-            titleEN: currentSong?.titleEN,
-            positionSeconds: playerState.currentTime,
-            source: context.source,
-            queueTrackIDs: context.trackIDs,
-            currentIndex: context.currentIndex,
-            speed: context.speed,
-            repeatMode: context.repeatMode,
-            shuffleEnabled: context.shuffleEnabled
+            song: SnapshotSong(
+                trackID: context.currentTrackID,
+                audioFileName: currentSong?.audioFileName,
+                localFilePath: currentSong?.localFilePath,
+                titleEN: currentSong?.titleEN,
+                positionSeconds: playerState.duration > 0
+                    ? playerState.duration
+                    : Float(currentSong?.duration ?? 0)
+            ),
+            session: SnapshotSession(
+                source: context.source,
+                queueTrackIDs: context.trackIDs,
+                currentIndex: context.currentIndex,
+                speed: context.speed,
+                repeatMode: context.repeatMode,
+                shuffleEnabled: context.shuffleEnabled
+            ),
+            state: SnapshotState(
+                positionSeconds: playerState.currentTime,
+                isPlaying: playerState.isPlaying
+            )
         )
 
         playbackPersistence.saveSnapshot(snapshot)
@@ -378,7 +405,9 @@ final class PlaybackController: ObservableObject {
     private func bindEngine() {
         playerEngine.statePublisher.receive(on: DispatchQueue.main).sink { [weak self] playerState in
             guard let self else { return }
-            self.playerState = playerState
+            
+            let mergedPlayerState = self.mergePlayerState(playerState)
+            self.playerState = mergedPlayerState
             self.refreshNowPlaying()
         }
         .store(in: &cancellables)
@@ -401,6 +430,33 @@ final class PlaybackController: ObservableObject {
             self.repeatMode = context?.repeatMode ?? .off
         }
         .store(in: &cancellables)
+    }
+
+    private func mergePlayerState(_ engineState: PlayerState) -> PlayerState {
+        let fallbackState = restoredStateFallback
+        let duration = engineState.duration > 0
+            ? engineState.duration
+            : (fallbackState?.duration ?? 0)
+        let currentTime = engineState.currentTime > 0
+            ? engineState.currentTime
+            : (fallbackState?.currentTime ?? 0)
+        let progress = duration > 0
+            ? min(max(currentTime / duration, 0), 1)
+            : (fallbackState?.progress ?? 0)
+
+        let mergedState = PlayerState(
+            currentTime: currentTime,
+            duration: duration,
+            progress: progress,
+            isPlaying: engineState.isPlaying,
+            hasLoadedItem: engineState.hasLoadedItem
+        )
+
+        if mergedState.duration > 0 || mergedState.currentTime > 0 {
+            restoredStateFallback = mergedState
+        }
+
+        return mergedState
     }
 
     private func setMiniPlayerVisible(_ isVisible: Bool) {

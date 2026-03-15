@@ -77,8 +77,9 @@ final class AVPlayerEngine: PlayerEngine {
         
         player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
         playerState.currentTime = clampedSeconds
-        let duration = max(playerState.duration, 0.01)
-        playerState.progress = min(max(clampedSeconds / duration, 0), 1)
+        if playerState.duration > 0 {
+            playerState.progress = min(max(clampedSeconds / playerState.duration, 0), 1)
+        }
     }
     
     func stop() {
@@ -93,9 +94,13 @@ final class AVPlayerEngine: PlayerEngine {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let currentTime = Float(max(0, time.seconds))
-                let durationSeconds = Float(item.duration.seconds)
-                let duration = durationSeconds.isFinite && durationSeconds > 0 ? durationSeconds : 0
-                let progress = duration > 0 ? min(max(currentTime / duration, 0), 1) : 0
+                let runtimeDuration = Float(item.duration.seconds)
+                let duration = runtimeDuration.isFinite && runtimeDuration > 0
+                    ? runtimeDuration
+                    : self.playerState.duration
+                let progress = duration > 0
+                    ? min(max(currentTime / duration, 0), 1)
+                    : self.playerState.progress
 
                 self.playerState = PlayerState(
                     currentTime: currentTime,
@@ -148,4 +153,3 @@ final class AVPlayerEngine: PlayerEngine {
         player = nil
     }
 }
-
