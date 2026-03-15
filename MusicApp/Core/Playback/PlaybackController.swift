@@ -248,13 +248,15 @@ final class PlaybackController: ObservableObject {
     func stop() {
         playerEngine.stop()
         let preservedDuration = max(playerState.duration, Float(currentSong?.duration ?? 0))
-        playerState = PlayerState(
+        let stoppedState = PlayerState(
             currentTime: 0,
             duration: preservedDuration,
             progress: 0,
             isPlaying: false,
             hasLoadedItem: false
         )
+        playerState = stoppedState
+        restoredStateFallback = stoppedState
         saveSnapshot()
         refreshNowPlaying()
     }
@@ -270,6 +272,7 @@ final class PlaybackController: ObservableObject {
         currentIndex = 0
         
         playerState = .empty
+        restoredStateFallback = nil
         playbackPersistence.clearSnapshot()
         nowPlayingService.clearNowPlaying()
     }
