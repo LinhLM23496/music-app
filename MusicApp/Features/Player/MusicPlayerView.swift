@@ -3,7 +3,6 @@ import SwiftUI
 struct MusicPlayerView: View {
     let song: Song
 
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @EnvironmentObject private var playlistViewModel: PlaylistViewModel
@@ -31,7 +30,6 @@ struct MusicPlayerView: View {
             VStack(spacing: 24) {
                 HStack {
                     Button {
-                        dismiss()
                         playbackController.dismissPlayer()
                     } label: {
                         Image(systemName: "chevron.down")

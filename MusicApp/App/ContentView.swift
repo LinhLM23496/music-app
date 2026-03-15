@@ -78,9 +78,9 @@ struct ContentView: View {
                     progress: playbackController.playerState.progress,
                     onTogglePlayPause: { playbackController.togglePlayPause() },
                     onNext: { playbackController.next() },
-                    onHide: { playbackController.hideAndCleanPlayback() },
+                    onHide: { playbackController.hideAndCleanMiniPlayer() },
                     onStop: { playbackController.stop() },
-                    onOpen: { playbackController.presentPlayer(for: currentSong.id) }
+                    onOpen: { playbackController.presentPlayer() }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 56)
@@ -113,11 +113,11 @@ struct ContentView: View {
         }
         .sheet(
             isPresented: Binding(
-                get: { playbackController.presentedTrackID != nil },
+                get: { playbackController.isPlayerSheetVisible },
                 set: { if !$0 { playbackController.dismissPlayer() } }
             )
         ) {
-            if let song = playbackController.presentedSong {
+            if let song = playbackController.currentSong {
                 MusicPlayerView(song: song)
                     .environmentObject(playbackController)
                     .environmentObject(localizationViewModel)

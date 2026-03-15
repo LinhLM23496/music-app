@@ -10,6 +10,6 @@ import Combine
 
 @MainActor
 final class PlaybackPresentationStore: ObservableObject {
-    @Published var isMiniPlayerHidden: Bool = false
-    @Published var presentedTrackID: UUID?
+    @Published var isMiniPlayerVisible: Bool = true
+    @Published var isPlayerSheetVisible: Bool = false
 }

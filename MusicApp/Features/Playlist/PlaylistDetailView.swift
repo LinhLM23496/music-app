@@ -48,7 +48,7 @@ struct PlaylistDetailView: View {
                             queueTrackIDs: playlistSongs.map(\.id),
                             source: .playlist(playlistID)
                         )
-                        playbackController.presentPlayer(for: song.id)
+                        playbackController.presentPlayer()
                     }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
@@ -93,7 +93,7 @@ struct PlaylistDetailView: View {
                         queueTrackIDs: playlistSongs.map(\.id),
                         source: .playlist(playlistID)
                     )
-                    playbackController.presentPlayer(for: firstSong.id)
+                    playbackController.presentPlayer()
                 } label: {
                     Image(systemName: "play.fill")
                         .font(.title2.weight(.bold))

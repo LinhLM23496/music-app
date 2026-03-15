@@ -56,17 +56,12 @@ final class PlaybackController: ObservableObject {
         queueTrackIDs.compactMap { trackResolver.song(for: $0) }
     }
 
-    var presentedTrackID: UUID? {
-        presentationStore.presentedTrackID
-    }
-
-    var presentedSong: Song? {
-        guard let presentedTrackID else { return nil }
-        return trackResolver.song(for: presentedTrackID)
+    var isPlayerSheetVisible: Bool {
+        presentationStore.isPlayerSheetVisible
     }
 
     var shouldShowMiniPlayer: Bool {
-        currentSong != nil && !presentationStore.isMiniPlayerHidden
+        currentSong != nil && presentationStore.isMiniPlayerVisible
     }
     
     func play(trackID: UUID, queueTrackIDs: [UUID] = [], source: PlaybackSource) {
@@ -81,8 +76,7 @@ final class PlaybackController: ObservableObject {
             currentTrackID = trackID
             self.queueTrackIDs = resolvedQueue
             currentIndex = index
-            presentationStore.isMiniPlayerHidden = false
-            presentationStore.presentedTrackID = trackID
+            presentationStore.isMiniPlayerVisible = true
             play()
             return
         }
@@ -103,8 +97,7 @@ final class PlaybackController: ObservableObject {
         
         playerEngine.load(url: url, autoPlay: true, rate: playbackContext.speed)
     
-        presentationStore.isMiniPlayerHidden = false
-        presentationStore.presentedTrackID = trackID
+        presentationStore.isMiniPlayerVisible = true
         
         saveSnapshot()
         refreshNowPlaying()
@@ -125,7 +118,7 @@ final class PlaybackController: ObservableObject {
             playerEngine.load(url: url, autoPlay: true, rate: context.speed)
         }
 
-        presentationStore.isMiniPlayerHidden = false
+        presentationStore.isMiniPlayerVisible = true
         saveSnapshot()
         refreshNowPlaying()
     }
@@ -249,8 +242,7 @@ final class PlaybackController: ObservableObject {
         
         playerEngine.load(url: url, autoPlay: true, rate: context.speed)
         
-        presentationStore.isMiniPlayerHidden = false
-        presentationStore.presentedTrackID = trackID
+        presentationStore.isMiniPlayerVisible = true
         
         saveSnapshot()
         refreshNowPlaying()
@@ -271,30 +263,29 @@ final class PlaybackController: ObservableObject {
     }
     
     func hideMiniPlayer() {
-        presentationStore.isMiniPlayerHidden = true
+        presentationStore.isMiniPlayerVisible = false
     }
     
-    func hideAndCleanPlayback() {
+    func hideAndCleanMiniPlayer() {
         playerEngine.stop()
-        presentationStore.isMiniPlayerHidden = true
+        hideMiniPlayer()
         contextStore.clearSession()
         
         currentTrackID = nil
         queueTrackIDs = []
         currentIndex = 0
         
-        presentationStore.presentedTrackID = nil
         playerState = .empty
         playbackPersistence.clearSnapshot()
         nowPlayingService.clearNowPlaying()
     }
 
-    func presentPlayer(for trackID: UUID) {
-        presentationStore.presentedTrackID = trackID
+    func presentPlayer() {
+        presentationStore.isPlayerSheetVisible = true
     }
 
     func dismissPlayer() {
-        presentationStore.presentedTrackID = nil
+        presentationStore.isPlayerSheetVisible = false
     }
     
     func restoreSnapshotIfNeeded() {
@@ -325,7 +316,7 @@ final class PlaybackController: ObservableObject {
             playerEngine.seek(to: snapshot.positionSeconds)
         }
 
-        presentationStore.isMiniPlayerHidden = false
+        presentationStore.isMiniPlayerVisible = true
         refreshNowPlaying()
     }
     

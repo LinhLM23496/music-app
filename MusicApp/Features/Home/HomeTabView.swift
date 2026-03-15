@@ -27,7 +27,7 @@ struct HomeTabView: View {
                                         queueTrackIDs: libraryViewModel.featuredTracks.map(\.id),
                                         source: .library
                                     )
-                                    playbackController.presentPlayer(for: song.id)
+                                    playbackController.presentPlayer()
                                 } label: {
                                     VStack(alignment: .leading, spacing: 8) {
                                         AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent)
@@ -63,7 +63,7 @@ struct HomeTabView: View {
                                         queueTrackIDs: favoriteSongs.map(\.id),
                                         source: .favorites
                                     )
-                                    playbackController.presentPlayer(for: song.id)
+                                    playbackController.presentPlayer()
                                 } label: {
                                     SongRowView(
                                         song: song,
@@ -101,7 +101,7 @@ struct HomeTabView: View {
                                         queueTrackIDs: importViewModel.importedSongs.map(\.id),
                                         source: .imported
                                     )
-                                    playbackController.presentPlayer(for: importedSong.id)
+                                    playbackController.presentPlayer()
                                 } label: {
                                     HStack(spacing: 12) {
                                         AlbumArtworkView(symbol: "waveform", accent: .green, cornerRadius: 12)
