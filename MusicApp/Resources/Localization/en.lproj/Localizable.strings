@@ -1,0 +1,65 @@
+"tab.home" = "Home";
+"tab.playlist" = "Playlist";
+"tab.info" = "Info";
+
+"home.title" = "Home";
+"home.featured" = "Featured Music";
+"home.favorites" = "Favorites";
+"home.favorites.empty.cta" = "Drop some hearts on your fave tracks, your vibe list shows up here.";
+
+"playlist.title" = "Playlist";
+"playlist.new" = "New";
+"playlist.create" = "Create Playlist";
+"playlist.name" = "Playlist Name";
+"playlist.play" = "Play Playlist";
+"playlist.cancel" = "Cancel";
+"playlist.create.button" = "Create";
+"playlist.rename" = "Rename Playlist";
+"playlist.rename.button" = "Save";
+"playlist.add.song" = "Add Song";
+"playlist.add.songs" = "Add Songs";
+"playlist.add.to" = "Add to Playlist";
+"playlist.add.song.success" = "Added to playlist.";
+"playlist.create.and.add.success" = "Created playlist and added song.";
+"playlist.remove.song" = "Remove";
+"playlist.remove.song.success" = "Removed from playlist.";
+"playlist.delete.confirm.title" = "Delete playlist?";
+"playlist.delete.confirm.message" = "This playlist will be removed from your library.";
+"playlist.delete.confirm.button" = "Delete";
+"playlist.no.songs" = "No songs yet";
+
+"common.done" = "Done";
+"songs.count" = "%d songs";
+
+"info.title" = "Info";
+"info.version" = "Version";
+"info.language" = "Language";
+"info.push.notifications" = "Push Notifications";
+"info.auto.play" = "Auto Play";
+"info.account" = "Account";
+"info.privacy" = "Privacy";
+"info.help" = "Help";
+
+"player.now.playing" = "Now Playing";
+"repeat.off" = "Repeat Off";
+"repeat.all" = "Repeat All";
+"repeat.one" = "Repeat One";
+"home.device.music" = "Device Music";
+"home.device.music.empty" = "No imported songs yet.";
+"home.device.music.import" = "Import MP3";
+"home.device.music.import.result" = "Imported %d, skipped %d, failed %d.";
+"home.device.music.import.error" = "Import failed.";
+"device.artist" = "From Device";
+"player.queue" = "Now Playing Queue";
+"player.speed" = "Speed";
+"player.sleep.timer" = "Sleep Timer";
+"player.sleep.off" = "Sleep Off";
+"player.sleep.5m" = "5 minutes";
+"player.sleep.10m" = "10 minutes";
+"player.sleep.15m" = "15 minutes";
+"player.sleep.30m" = "30 minutes";
+"player.sleep.remaining" = "Sleep in %@";
+
+"auth.guest" = "Guest";
+"auth.signin.demo" = "Sign In (Demo)";
+"auth.signout" = "Sign Out";

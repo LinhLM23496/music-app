@@ -10,9 +10,35 @@
 		05100E202F5ACC310095E72C /* MusicApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MusicApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		052AE9F82F65ED7600F0B559 /* Exceptions for "MusicApp" folder in "MusicApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				README.md,
+				Resources/MockData/README.md,
+			);
+			target = 05100E1F2F5ACC310095E72C /* MusicApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		052AE9F92F65ED7600F0B559 /* Exceptions for "MusicApp" folder in "Compile Sources" phase from "MusicApp" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 05100E1C2F5ACC310095E72C /* Sources */;
+			membershipExceptions = (
+				README.md,
+				Resources/MockData/README.md,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		05100E222F5ACC310095E72C /* MusicApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				052AE9F82F65ED7600F0B559 /* Exceptions for "MusicApp" folder in "MusicApp" target */,
+				052AE9F92F65ED7600F0B559 /* Exceptions for "MusicApp" folder in "Compile Sources" phase from "MusicApp" target */,
+			);
 			path = MusicApp;
 			sourceTree = "<group>";
 		};
