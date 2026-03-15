@@ -17,10 +17,11 @@ final class PlaybackController: ObservableObject {
     @Published private(set) var playbackSpeed: Float = 1.0
     @Published private(set) var shuffleEnabled = false
     @Published private(set) var repeatMode: RepeatMode = .off
+    @Published private(set) var isMiniPlayerVisible = true
+    @Published private(set) var isPlayerSheetVisible = false
     
     private let playerEngine: PlayerEngine
     private let contextStore: PlaybackContextStore
-    private let presentationStore: PlaybackPresentationStore
     private let playbackPersistence: PlaybackPersistence
     private let trackResolver: TrackResolver
     private let nowPlayingService: NowPlayingControlling
@@ -31,14 +32,12 @@ final class PlaybackController: ObservableObject {
     init(
         playerEngine: PlayerEngine,
         contextStore: PlaybackContextStore,
-        presentationStore: PlaybackPresentationStore,
         playbackPersistence: PlaybackPersistence,
         trackResolver: TrackResolver,
         nowPlayingService: NowPlayingControlling
     ) {
         self.playerEngine = playerEngine
         self.contextStore = contextStore
-        self.presentationStore = presentationStore
         self.playbackPersistence = playbackPersistence
         self.trackResolver = trackResolver
         self.nowPlayingService = nowPlayingService
@@ -56,12 +55,8 @@ final class PlaybackController: ObservableObject {
         queueTrackIDs.compactMap { trackResolver.song(for: $0) }
     }
 
-    var isPlayerSheetVisible: Bool {
-        presentationStore.isPlayerSheetVisible
-    }
-
     var shouldShowMiniPlayer: Bool {
-        currentSong != nil && presentationStore.isMiniPlayerVisible
+        currentSong != nil && isMiniPlayerVisible
     }
     
     func play(trackID: UUID, queueTrackIDs: [UUID] = [], source: PlaybackSource) {
@@ -76,7 +71,6 @@ final class PlaybackController: ObservableObject {
             currentTrackID = trackID
             self.queueTrackIDs = resolvedQueue
             currentIndex = index
-            presentationStore.isMiniPlayerVisible = true
             play()
             return
         }
@@ -97,7 +91,7 @@ final class PlaybackController: ObservableObject {
         
         playerEngine.load(url: url, autoPlay: true, rate: playbackContext.speed)
     
-        presentationStore.isMiniPlayerVisible = true
+        setMiniPlayerVisible(true)
         
         saveSnapshot()
         refreshNowPlaying()
@@ -118,7 +112,7 @@ final class PlaybackController: ObservableObject {
             playerEngine.load(url: url, autoPlay: true, rate: context.speed)
         }
 
-        presentationStore.isMiniPlayerVisible = true
+        setMiniPlayerVisible(true)
         saveSnapshot()
         refreshNowPlaying()
     }
@@ -242,7 +236,7 @@ final class PlaybackController: ObservableObject {
         
         playerEngine.load(url: url, autoPlay: true, rate: context.speed)
         
-        presentationStore.isMiniPlayerVisible = true
+        setMiniPlayerVisible(true)
         
         saveSnapshot()
         refreshNowPlaying()
@@ -262,13 +256,10 @@ final class PlaybackController: ObservableObject {
         refreshNowPlaying()
     }
     
-    func hideMiniPlayer() {
-        presentationStore.isMiniPlayerVisible = false
-    }
-    
     func hideAndCleanMiniPlayer() {
         playerEngine.stop()
-        hideMiniPlayer()
+        setMiniPlayerVisible(false)
+        dismissPlayer()
         contextStore.clearSession()
         
         currentTrackID = nil
@@ -281,11 +272,11 @@ final class PlaybackController: ObservableObject {
     }
 
     func presentPlayer() {
-        presentationStore.isPlayerSheetVisible = true
+        setPlayerSheetVisible(true)
     }
 
     func dismissPlayer() {
-        presentationStore.isPlayerSheetVisible = false
+        setPlayerSheetVisible(false)
     }
     
     func restoreSnapshotIfNeeded() {
@@ -316,7 +307,7 @@ final class PlaybackController: ObservableObject {
             playerEngine.seek(to: snapshot.positionSeconds)
         }
 
-        presentationStore.isMiniPlayerVisible = true
+        setMiniPlayerVisible(true)
         refreshNowPlaying()
     }
     
@@ -410,5 +401,13 @@ final class PlaybackController: ObservableObject {
             self.repeatMode = context?.repeatMode ?? .off
         }
         .store(in: &cancellables)
+    }
+
+    private func setMiniPlayerVisible(_ isVisible: Bool) {
+        isMiniPlayerVisible = isVisible
+    }
+
+    private func setPlayerSheetVisible(_ isVisible: Bool) {
+        isPlayerSheetVisible = isVisible
     }
 }
