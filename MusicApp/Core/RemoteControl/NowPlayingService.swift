@@ -1,5 +1,6 @@
 import Foundation
 import MediaPlayer
+import UIKit
 
 struct RemotePlaybackCommandHandlers {
     let onPlay: () -> Bool
@@ -19,7 +20,8 @@ protocol NowPlayingControlling: AnyObject {
         duration: Double,
         elapsedTime: Double,
         playbackRate: Double,
-        defaultRate: Double
+        defaultRate: Double,
+        artwork: UIImage?
     )
     func clearNowPlaying()
 }
@@ -68,7 +70,8 @@ final class SystemNowPlayingService: NowPlayingControlling {
         duration: Double,
         elapsedTime: Double,
         playbackRate: Double,
-        defaultRate: Double
+        defaultRate: Double,
+        artwork: UIImage?
     ) {
         var info = nowPlayingInfoCenter.nowPlayingInfo ?? [:]
         info[MPMediaItemPropertyTitle] = title
@@ -78,6 +81,9 @@ final class SystemNowPlayingService: NowPlayingControlling {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsedTime
         info[MPNowPlayingInfoPropertyPlaybackRate] = playbackRate
         info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = defaultRate
+        if let artwork {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: artwork.size) { _ in artwork }
+        }
         nowPlayingInfoCenter.nowPlayingInfo = info
         hasPublishedNowPlayingInfo = true
     }
