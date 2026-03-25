@@ -76,3 +76,12 @@
 "import.media.track.job" = "Theo dõi job";
 "job.tracking.title" = "Theo dõi job";
 "job.tracking.description" = "Màn hình theo dõi tạm thời. Logic sẽ bổ sung ở commit sau.";
+"job.tracking.card.title" = "Job";
+"job.tracking.status" = "Trạng thái";
+"job.tracking.progress" = "Tiến trình";
+"job.tracking.source.title" = "Tiêu đề nguồn";
+"job.tracking.assets.count" = "Tài nguyên";
+"job.tracking.status.unknown" = "không rõ";
+"job.tracking.copy.success" = "Đã copy job_id";
+"job.tracking.download" = "Tải xuống";
+"job.tracking.downloaded.path" = "Đã lưu";

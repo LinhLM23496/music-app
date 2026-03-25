@@ -76,3 +76,12 @@
 "import.media.track.job" = "Track Job";
 "job.tracking.title" = "Track Job";
 "job.tracking.description" = "Tracking screen placeholder. Logic will be added in the next commit.";
+"job.tracking.card.title" = "Job";
+"job.tracking.status" = "Status";
+"job.tracking.progress" = "Progress";
+"job.tracking.source.title" = "Source title";
+"job.tracking.assets.count" = "Assets";
+"job.tracking.status.unknown" = "unknown";
+"job.tracking.copy.success" = "Copied job_id";
+"job.tracking.download" = "Download";
+"job.tracking.downloaded.path" = "Saved";

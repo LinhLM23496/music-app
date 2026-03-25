@@ -6,8 +6,53 @@ enum MediaSourceType: String, Codable {
     case facebook
 }
 
+enum JobExecutionStatus: String, Codable {
+    case queued
+    case processing
+    case done
+    case failed
+
+    var isProcessing: Bool {
+        self == .processing
+    }
+}
+
+struct MediaJobStatus: Decodable {
+    let id: String
+    let status: JobExecutionStatus
+    let progress: Int
+    let error: String?
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct MediaJobResult: Decodable {
+    struct SourceMeta: Decodable {
+        let title: String?
+        let durationMs: Int?
+        let thumbnail: String?
+    }
+
+    struct Asset: Decodable, Identifiable {
+        let id: String
+        let jobId: String?
+        let kind: String?
+        let format: String?
+        let size: Int?
+        let storagePath: String?
+        let publicUrl: String?
+        let createdAt: String?
+    }
+
+    let sourceMeta: SourceMeta?
+    let assets: [Asset]
+}
+
 protocol MediaJobServicing {
     func createJob(sourceType: MediaSourceType, sourceURL: String) async throws -> String
+    func getJobStatus(jobID: String) async throws -> MediaJobStatus
+    func getJobResult(jobID: String) async throws -> MediaJobResult
+    func downloadJobAsset(jobID: String) async throws -> URL
 }
 
 struct LiveMediaJobService: MediaJobServicing {
@@ -30,6 +75,21 @@ struct LiveMediaJobService: MediaJobServicing {
 
         let response = try await apiClient.send(endpoint, as: CreateMediaJobResponse.self)
         return response.jobID
+    }
+
+    func getJobStatus(jobID: String) async throws -> MediaJobStatus {
+        let endpoint = MediaJobEndpoints.getJobStatus(jobID: jobID)
+        return try await apiClient.send(endpoint, as: MediaJobStatus.self)
+    }
+
+    func getJobResult(jobID: String) async throws -> MediaJobResult {
+        let endpoint = MediaJobEndpoints.getJobResult(jobID: jobID)
+        return try await apiClient.send(endpoint, as: MediaJobResult.self)
+    }
+
+    func downloadJobAsset(jobID: String) async throws -> URL {
+        let endpoint = MediaJobEndpoints.getJobDownload(jobID: jobID)
+        return try await apiClient.downloadFile(endpoint, preferredFileName: nil)
     }
 }
 

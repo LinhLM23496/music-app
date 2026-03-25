@@ -66,8 +66,10 @@ final class ImportMediaViewModel: ObservableObject {
 struct ImportMediaView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @StateObject private var viewModel: ImportMediaViewModel
+    private let service: MediaJobServicing
 
     init(service: MediaJobServicing) {
+        self.service = service
         _viewModel = StateObject(wrappedValue: ImportMediaViewModel(service: service))
     }
 
@@ -127,7 +129,7 @@ struct ImportMediaView: View {
                             .textSelection(.enabled)
 
                         NavigationLink {
-                            JobTrackingView(jobID: jobID)
+                            JobTrackingView(jobID: jobID, service: service)
                                 .environmentObject(localizationViewModel)
                         } label: {
                             Text(localizationViewModel.t("import.media.track.job"))

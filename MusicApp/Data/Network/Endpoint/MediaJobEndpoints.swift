@@ -8,4 +8,25 @@ enum MediaJobEndpoints {
             body: body
         )
     }
+
+    static func getJobStatus(jobID: String) -> APIEndpoint {
+        APIEndpoint(
+            path: APIPathConstants.jobStatus(id: jobID),
+            method: .get
+        )
+    }
+
+    static func getJobResult(jobID: String) -> APIEndpoint {
+        APIEndpoint(
+            path: APIPathConstants.jobResult(id: jobID),
+            method: .get
+        )
+    }
+
+    static func getJobDownload(jobID: String) -> APIEndpoint {
+        APIEndpoint(
+            path: APIPathConstants.jobDownload(id: jobID),
+            method: .get
+        )
+    }
 }
