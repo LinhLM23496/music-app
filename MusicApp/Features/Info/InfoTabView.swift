@@ -68,6 +68,13 @@ struct InfoTabView: View {
                         } label: {
                             settingsRow(localizationViewModel.t("info.help"), icon: "questionmark.circle")
                         }
+
+                        NavigationLink {
+                            ImportMediaView(service: AppContainer.shared.mediaJobService)
+                                .environmentObject(localizationViewModel)
+                        } label: {
+                            settingsRow(localizationViewModel.t("info.import.media"), icon: "square.and.arrow.down")
+                        }
                     }
                     .tint(.green)
                     .padding(16)

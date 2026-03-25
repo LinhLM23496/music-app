@@ -63,3 +63,16 @@
 "auth.guest" = "Khách";
 "auth.signin.demo" = "Đăng Nhập (Demo)";
 "auth.signout" = "Đăng Xuất";
+
+"info.import.media" = "Import Media";
+"import.media.title" = "Import Media";
+"import.media.description" = "Dán URL media (YouTube, TikTok, Facebook) rồi gửi để tạo job ingest.";
+"import.media.input.label" = "URL nguồn";
+"import.media.paste" = "Dán";
+"import.media.submit" = "Bắt đầu import";
+"import.media.success" = "Tạo job thành công";
+"import.media.error.title" = "Import thất bại";
+"import.media.error.invalid.url" = "Vui lòng nhập URL hợp lệ.";
+"import.media.track.job" = "Theo dõi job";
+"job.tracking.title" = "Theo dõi job";
+"job.tracking.description" = "Màn hình theo dõi tạm thời. Logic sẽ bổ sung ở commit sau.";

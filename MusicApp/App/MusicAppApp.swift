@@ -16,6 +16,8 @@ final class AppContainer {
     let trackRepository: TrackRepository
     let favoritesRepository: FavoritesRepository
     let playlistRepository: PlaylistRepository
+    let apiClient: APIClient
+    let mediaJobService: MediaJobServicing
 
     private init() {
         catalogProvider = MockMusicCatalogProvider()
@@ -27,6 +29,8 @@ final class AppContainer {
         )
         favoritesRepository = UserDefaultsFavoritesRepository()
         playlistRepository = UserDefaultsPlaylistRepository()
+        apiClient = URLSessionAPIClient(baseURL: APIConstants.baseURL)
+        mediaJobService = LiveMediaJobService(apiClient: apiClient)
     }
 
     func makeAuthViewModel() -> AuthViewModel {
