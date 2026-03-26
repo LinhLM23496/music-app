@@ -49,10 +49,10 @@ struct MediaJobResult: Decodable {
 }
 
 protocol MediaJobServicing {
-    func createJob(sourceType: MediaSourceType, sourceURL: String) async throws -> String
+    func createJob(sourceType: MediaSourceType, sourceURL: String, useCookie: Bool) async throws -> String
     func getJobStatus(jobID: String) async throws -> MediaJobStatus
     func getJobResult(jobID: String) async throws -> MediaJobResult
-    func downloadJobAsset(jobID: String) async throws -> URL
+    func downloadJobAsset(jobID: String, onProgress: (@Sendable (Double) -> Void)?) async throws -> URL
 }
 
 struct LiveMediaJobService: MediaJobServicing {
@@ -62,13 +62,14 @@ struct LiveMediaJobService: MediaJobServicing {
         self.apiClient = apiClient
     }
 
-    func createJob(sourceType: MediaSourceType, sourceURL: String) async throws -> String {
+    func createJob(sourceType: MediaSourceType, sourceURL: String, useCookie: Bool) async throws -> String {
         let payload = CreateMediaJobRequest(
             sourceType: sourceType,
             sourceUrl: sourceURL,
             output: "mp3",
             mode: "store",
-            videoKeep: false
+            videoKeep: false,
+            useCookie: useCookie
         )
 
         let endpoint = MediaJobEndpoints.createJob(body: try JSONEncoder().encode(payload))
@@ -87,9 +88,13 @@ struct LiveMediaJobService: MediaJobServicing {
         return try await apiClient.send(endpoint, as: MediaJobResult.self)
     }
 
-    func downloadJobAsset(jobID: String) async throws -> URL {
+    func downloadJobAsset(jobID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
         let endpoint = MediaJobEndpoints.getJobDownload(jobID: jobID)
-        return try await apiClient.downloadFile(endpoint, preferredFileName: nil)
+        return try await apiClient.downloadFile(
+            endpoint,
+            preferredFileName: nil,
+            onProgress: onProgress
+        )
     }
 }
 
@@ -99,6 +104,7 @@ private struct CreateMediaJobRequest: Encodable {
     let output: String
     let mode: String
     let videoKeep: Bool
+    let useCookie: Bool
 }
 
 private struct CreateMediaJobResponse: Decodable {

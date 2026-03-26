@@ -5,6 +5,7 @@ import Combine
 @MainActor
 final class ImportMediaViewModel: ObservableObject {
     @Published var sourceText: String = ""
+    @Published var useCookie = false
     @Published private(set) var isSubmitting = false
     @Published private(set) var createdJobID: String?
     @Published private(set) var errorMessage: String?
@@ -39,7 +40,11 @@ final class ImportMediaViewModel: ObservableObject {
 
         do {
             let sourceType = detectSourceType(from: trimmed)
-            let jobID = try await service.createJob(sourceType: sourceType, sourceURL: trimmed)
+            let jobID = try await service.createJob(
+                sourceType: sourceType,
+                sourceURL: trimmed,
+                useCookie: useCookie
+            )
             createdJobID = jobID
         } catch {
             errorMessage = error.localizedDescription
@@ -90,6 +95,8 @@ struct ImportMediaView: View {
                         .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+
+                    Toggle(localizationViewModel.t("import.media.use.cookie"), isOn: $viewModel.useCookie)
 
                     HStack {
                         Button(localizationViewModel.t("import.media.paste")) {

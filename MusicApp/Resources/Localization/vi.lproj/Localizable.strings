@@ -85,3 +85,5 @@
 "job.tracking.copy.success" = "Đã copy job_id";
 "job.tracking.download" = "Tải xuống";
 "job.tracking.downloaded.path" = "Đã lưu";
+"import.media.use.cookie" = "Dùng Cookie";
+"job.tracking.download.progress" = "Tiến trình tải";

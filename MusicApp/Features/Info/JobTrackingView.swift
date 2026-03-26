@@ -8,6 +8,7 @@ final class JobTrackingViewModel: ObservableObject {
     @Published private(set) var result: MediaJobResult?
     @Published private(set) var isLoading = false
     @Published private(set) var isDownloading = false
+    @Published private(set) var downloadProgress: Double = 0
     @Published private(set) var errorMessage: String?
     @Published private(set) var downloadedFileURL: URL?
 
@@ -78,6 +79,7 @@ final class JobTrackingViewModel: ObservableObject {
         guard status?.status == .done else { return }
 
         isDownloading = true
+        downloadProgress = 0
         errorMessage = nil
 
         defer {
@@ -85,7 +87,15 @@ final class JobTrackingViewModel: ObservableObject {
         }
 
         do {
-            downloadedFileURL = try await service.downloadJobAsset(jobID: jobID)
+            downloadedFileURL = try await service.downloadJobAsset(
+                jobID: jobID,
+                onProgress: { [weak self] progress in
+                    guard let self else { return }
+                    Task { @MainActor in
+                        self.downloadProgress = progress
+                    }
+                }
+            )
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -161,6 +171,17 @@ struct JobTrackingView: View {
                                     .buttonStyle(.borderedProminent)
                                     .tint(.green)
                                     .disabled(viewModel.isDownloading)
+
+                                    if viewModel.isDownloading {
+                                        ProgressView(value: viewModel.downloadProgress)
+                                            .tint(.green)
+
+                                        Text(
+                                            "\(localizationViewModel.t("job.tracking.download.progress")): \(Int(viewModel.downloadProgress * 100))%"
+                                        )
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         } else if viewModel.isLoading {

@@ -85,3 +85,5 @@
 "job.tracking.copy.success" = "Copied job_id";
 "job.tracking.download" = "Download";
 "job.tracking.downloaded.path" = "Saved";
+"import.media.use.cookie" = "Use Cookie";
+"job.tracking.download.progress" = "Download progress";

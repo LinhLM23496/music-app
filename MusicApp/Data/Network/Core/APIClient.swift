@@ -30,7 +30,11 @@ enum APIClientError: LocalizedError {
 
 protocol APIClient {
     func send<T: Decodable>(_ endpoint: APIEndpoint, as type: T.Type) async throws -> T
-    func downloadFile(_ endpoint: APIEndpoint, preferredFileName: String?) async throws -> URL
+    func downloadFile(
+        _ endpoint: APIEndpoint,
+        preferredFileName: String?,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL
 }
 
 struct URLSessionAPIClient: APIClient {
@@ -82,7 +86,11 @@ struct URLSessionAPIClient: APIClient {
         }
     }
 
-    func downloadFile(_ endpoint: APIEndpoint, preferredFileName: String? = nil) async throws -> URL {
+    func downloadFile(
+        _ endpoint: APIEndpoint,
+        preferredFileName: String? = nil,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> URL {
         let request: URLRequest
 
         do {
@@ -91,14 +99,14 @@ struct URLSessionAPIClient: APIClient {
             throw APIClientError.invalidURL
         }
 
-        let (temporaryFileURL, response) = try await session.download(for: request)
+        let (bytes, response) = try await session.bytes(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            if let data = try? Data(contentsOf: temporaryFileURL),
+            if let data = try? await collectData(from: bytes),
                let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
                 throw APIClientError.server(
                     code: apiError.code,
@@ -116,12 +124,45 @@ struct URLSessionAPIClient: APIClient {
 
         let destinationFolder = try makeDownloadDirectoryIfNeeded()
         let destinationURL = destinationFolder.appendingPathComponent(filename)
+        let expectedBytes = max(httpResponse.expectedContentLength, 0)
+        var downloadedBytes: Int64 = 0
 
         do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
-            try FileManager.default.moveItem(at: temporaryFileURL, to: destinationURL)
+
+            FileManager.default.createFile(atPath: destinationURL.path, contents: nil)
+            let fileHandle = try FileHandle(forWritingTo: destinationURL)
+            defer {
+                try? fileHandle.close()
+            }
+
+            onProgress?(0)
+
+            var buffer = Data()
+            buffer.reserveCapacity(64 * 1024)
+
+            for try await byte in bytes {
+                buffer.append(byte)
+                downloadedBytes += 1
+
+                if buffer.count >= 64 * 1024 {
+                    try fileHandle.write(contentsOf: buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                }
+
+                if expectedBytes > 0 {
+                    let progress = min(max(Double(downloadedBytes) / Double(expectedBytes), 0), 1)
+                    onProgress?(progress)
+                }
+            }
+
+            if !buffer.isEmpty {
+                try fileHandle.write(contentsOf: buffer)
+            }
+
+            onProgress?(1)
             return destinationURL
         } catch {
             throw APIClientError.fileSaveFailed
@@ -155,5 +196,13 @@ struct URLSessionAPIClient: APIClient {
         }
 
         return nil
+    }
+
+    private func collectData(from bytes: URLSession.AsyncBytes) async throws -> Data {
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+        }
+        return data
     }
 }
