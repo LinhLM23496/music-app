@@ -4,6 +4,10 @@ import Combine
 
 @MainActor
 final class JobTrackingViewModel: ObservableObject {
+    private enum Limits {
+        static let maxTitleLength = 50
+    }
+
     @Published private(set) var status: MediaJobStatus?
     @Published private(set) var result: MediaJobResult?
     @Published private(set) var isLoading = false
@@ -11,11 +15,13 @@ final class JobTrackingViewModel: ObservableObject {
     @Published private(set) var downloadProgress: Double = 0
     @Published private(set) var errorMessage: String?
     @Published private(set) var downloadedFileURL: URL?
+    @Published private(set) var editedSourceTitle: String = ""
 
     let jobID: String
 
     private let service: MediaJobServicing
     private var pollingTask: Task<Void, Never>?
+    private var hasUserEditedTitle = false
 
     init(jobID: String, service: MediaJobServicing) {
         self.jobID = jobID
@@ -65,6 +71,11 @@ final class JobTrackingViewModel: ObservableObject {
             if !jobStatus.status.isProcessing {
                 let jobResult = try await service.getJobResult(jobID: jobID)
                 result = jobResult
+
+                let title = normalizedTitle(jobResult.sourceMeta?.title)
+                if !hasUserEditedTitle, !title.isEmpty {
+                    editedSourceTitle = title
+                }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -73,6 +84,18 @@ final class JobTrackingViewModel: ObservableObject {
         if initialLoad {
             isLoading = false
         }
+    }
+
+    func setEditedSourceTitle(_ title: String) {
+        editedSourceTitle = normalizedTitle(title)
+        hasUserEditedTitle = true
+    }
+
+    var displaySourceTitle: String? {
+        if !editedSourceTitle.isEmpty {
+            return editedSourceTitle
+        }
+        return normalizedTitle(result?.sourceMeta?.title)
     }
 
     func downloadAsset() async {
@@ -89,6 +112,7 @@ final class JobTrackingViewModel: ObservableObject {
         do {
             downloadedFileURL = try await service.downloadJobAsset(
                 jobID: jobID,
+                preferredFileName: editedSourceTitle.isEmpty ? nil : editedSourceTitle,
                 onProgress: { [weak self] progress in
                     guard let self else { return }
                     Task { @MainActor in
@@ -100,12 +124,20 @@ final class JobTrackingViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
     }
+
+    private func normalizedTitle(_ title: String?) -> String {
+        let trimmed = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return String(trimmed.prefix(Limits.maxTitleLength))
+    }
 }
 
 struct JobTrackingView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @StateObject private var viewModel: JobTrackingViewModel
     @State private var showCopiedToast = false
+    @State private var showEditTitlePopup = false
+    @State private var editedTitleDraft = ""
     @State private var toastWorkItem: DispatchWorkItem?
 
     init(jobID: String, service: MediaJobServicing) {
@@ -138,9 +170,23 @@ struct JobTrackingView: View {
                                 .font(.subheadline)
 
                             if !status.status.isProcessing {
-                                if let sourceTitle = viewModel.result?.sourceMeta?.title, !sourceTitle.isEmpty {
-                                    Text("\(localizationViewModel.t("job.tracking.source.title")): \(sourceTitle)")
-                                        .font(.subheadline)
+                                if let sourceTitle = viewModel.displaySourceTitle, !sourceTitle.isEmpty {
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("\(localizationViewModel.t("job.tracking.source.title")): \(sourceTitle)")
+                                            .font(.subheadline)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .fixedSize(horizontal: false, vertical: true)
+
+                                        Button {
+                                            editedTitleDraft = sourceTitle
+                                            showEditTitlePopup = true
+                                        } label: {
+                                            Image(systemName: "square.and.pencil")
+                                                .foregroundStyle(.green)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .accessibilityLabel(localizationViewModel.t("job.tracking.source.title.edit"))
+                                    }
                                 }
 
                                 let assetCount = viewModel.result?.assets.count ?? 0
@@ -160,8 +206,11 @@ struct JobTrackingView: View {
                                         }
                                     } label: {
                                         if viewModel.isDownloading {
-                                            ProgressView()
-                                                .tint(.white)
+                                            Text(
+                                                "\(localizationViewModel.t("job.tracking.download.progress")): \(Int(viewModel.downloadProgress * 100))%"
+                                            )
+                                            .font(.subheadline.weight(.semibold))
+                                            .frame(maxWidth: .infinity)
                                         } else {
                                             Text(localizationViewModel.t("job.tracking.download"))
                                                 .font(.subheadline.weight(.semibold))
@@ -228,6 +277,29 @@ struct JobTrackingView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: showCopiedToast)
+        .alert(localizationViewModel.t("job.tracking.source.title.edit"), isPresented: $showEditTitlePopup) {
+            TextField(localizationViewModel.t("job.tracking.source.title.placeholder"), text: $editedTitleDraft)
+            Button(localizationViewModel.t("job.tracking.source.title.clear")) {
+                editedTitleDraft = ""
+                viewModel.setEditedSourceTitle("")
+            }
+            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {}
+            Button(localizationViewModel.t("common.done")) {
+                let normalized = String(
+                    editedTitleDraft
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .prefix(50)
+                )
+                viewModel.setEditedSourceTitle(normalized)
+            }
+        } message: {
+            Text(localizationViewModel.t("job.tracking.source.title.limit"))
+        }
+        .onChange(of: editedTitleDraft) { _, newValue in
+            if newValue.count > 50 {
+                editedTitleDraft = String(newValue.prefix(50))
+            }
+        }
         .onAppear {
             viewModel.startTracking()
         }

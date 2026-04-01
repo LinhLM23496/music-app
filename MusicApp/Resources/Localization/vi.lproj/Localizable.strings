@@ -72,9 +72,11 @@
 "import.media.description" = "Dán URL media (YouTube, TikTok, Facebook) rồi gửi để tạo job ingest.";
 "import.media.input.label" = "URL nguồn";
 "import.media.paste" = "Dán";
+"import.media.clear" = "Xóa nhanh";
 "import.media.jobid.label" = "Job ID";
 "import.media.jobid.placeholder" = "Nhập hoặc dán job_id";
 "import.media.jobid.paste" = "Dán job_id";
+"import.media.jobid.clear" = "Xóa nhanh";
 "import.media.submit" = "Bắt đầu import";
 "import.media.success" = "Tạo job thành công";
 "import.media.error.title" = "Import thất bại";
@@ -86,6 +88,10 @@
 "job.tracking.status" = "Trạng thái";
 "job.tracking.progress" = "Tiến trình";
 "job.tracking.source.title" = "Tiêu đề nguồn";
+"job.tracking.source.title.edit" = "Sửa tiêu đề nguồn";
+"job.tracking.source.title.placeholder" = "Nhập tiêu đề mới";
+"job.tracking.source.title.clear" = "Xóa nhanh";
+"job.tracking.source.title.limit" = "Tối đa 50 ký tự.";
 "job.tracking.assets.count" = "Tài nguyên";
 "job.tracking.status.unknown" = "không rõ";
 "job.tracking.copy.success" = "Đã copy job_id";

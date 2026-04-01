@@ -23,10 +23,16 @@ enum MediaJobEndpoints {
         )
     }
 
-    static func getJobDownload(jobID: String) -> APIEndpoint {
-        APIEndpoint(
+    static func getJobDownload(jobID: String, filename: String? = nil) -> APIEndpoint {
+        var endpoint = APIEndpoint(
             path: APIPathConstants.jobDownload(id: jobID),
             method: .get
         )
+
+        if let filename, !filename.isEmpty {
+            endpoint.queryItems = [URLQueryItem(name: "filename", value: filename)]
+        }
+
+        return endpoint
     }
 }

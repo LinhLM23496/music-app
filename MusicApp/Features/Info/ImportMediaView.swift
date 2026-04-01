@@ -109,6 +109,12 @@ struct ImportMediaView: View {
                         }
                         .buttonStyle(.bordered)
 
+                        Button(localizationViewModel.t("import.media.clear")) {
+                            viewModel.sourceText = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.sourceText.isEmpty)
+
                         Spacer()
 
                         Button {
@@ -146,6 +152,12 @@ struct ImportMediaView: View {
                             viewModel.setJobIDText(from: strings)
                         }
                         .buttonStyle(.bordered)
+
+                        Button(localizationViewModel.t("import.media.jobid.clear")) {
+                            viewModel.jobIDText = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.jobIDText.isEmpty)
 
                         Spacer()
 
