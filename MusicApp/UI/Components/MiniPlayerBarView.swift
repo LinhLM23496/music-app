@@ -31,9 +31,7 @@ struct MiniPlayerBarView: View {
                             .matchedGeometryEffect(id: "player.artwork.\(song.id.uuidString)", in: heroNamespace)
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(1)
+                                MarqueeText(title, font: .subheadline.weight(.semibold))
                                 Text(song.artist)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)

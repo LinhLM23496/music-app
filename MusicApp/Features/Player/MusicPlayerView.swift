@@ -303,9 +303,7 @@ private struct NowPlayingInfoView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(song.localizedTitle(for: language))
-                    .font(.title2.bold())
-                    .lineLimit(1)
+                MarqueeText(song.localizedTitle(for: language), font: .title2.bold())
                 Text(song.artist)
                     .foregroundStyle(.secondary)
             }
