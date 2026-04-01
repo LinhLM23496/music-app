@@ -67,6 +67,11 @@ struct PlaylistTabView: View {
         }
         .alert(localizationViewModel.t("playlist.create"), isPresented: $showingCreatePlaylist) {
             TextField(localizationViewModel.t("playlist.name"), text: $newPlaylistName)
+                .onChange(of: newPlaylistName) { _, newValue in
+                    if newValue.count > PlaylistUseCases.maxPlaylistNameLength {
+                        newPlaylistName = String(newValue.prefix(PlaylistUseCases.maxPlaylistNameLength))
+                    }
+                }
             Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
                 newPlaylistName = ""
             }
