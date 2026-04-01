@@ -31,9 +31,11 @@ final class AVPlayerEngine: PlayerEngine {
     private var player: AVPlayer?
     private var timeObserverToken: Any?
     private var didPlayToEndObserver: NSObjectProtocol?
+    private var audioInterruptionObserver: NSObjectProtocol?
     
     func load(url: URL, autoPlay: Bool, rate: Float) {
         cleanup()
+        observeAudioInterruptionIfNeeded()
         
         let item = AVPlayerItem(url: url)
         let player = AVPlayer(playerItem: item)
@@ -151,5 +153,37 @@ final class AVPlayerEngine: PlayerEngine {
         }
         
         player = nil
+    }
+
+    private func observeAudioInterruptionIfNeeded() {
+        guard audioInterruptionObserver == nil else { return }
+
+        audioInterruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            let interruptionType: AVAudioSession.InterruptionType? = {
+                guard
+                    let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt
+                else {
+                    return nil
+                }
+                return AVAudioSession.InterruptionType(rawValue: rawType)
+            }()
+
+            Task { @MainActor [weak self, interruptionType] in
+                guard let self else { return }
+                if interruptionType == .began {
+                    pause()
+                }
+            }
+        }
+    }
+
+    deinit {
+        if let observer = audioInterruptionObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 }
