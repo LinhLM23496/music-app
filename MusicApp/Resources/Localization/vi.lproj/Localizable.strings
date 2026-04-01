@@ -72,6 +72,9 @@
 "import.media.description" = "Dán URL media (YouTube, TikTok, Facebook) rồi gửi để tạo job ingest.";
 "import.media.input.label" = "URL nguồn";
 "import.media.paste" = "Dán";
+"import.media.jobid.label" = "Job ID";
+"import.media.jobid.placeholder" = "Nhập hoặc dán job_id";
+"import.media.jobid.paste" = "Dán job_id";
 "import.media.submit" = "Bắt đầu import";
 "import.media.success" = "Tạo job thành công";
 "import.media.error.title" = "Import thất bại";

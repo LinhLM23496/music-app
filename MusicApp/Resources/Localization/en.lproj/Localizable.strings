@@ -72,6 +72,9 @@
 "import.media.description" = "Paste a media URL (YouTube, TikTok, Facebook) and submit to create an ingest job.";
 "import.media.input.label" = "Source URL";
 "import.media.paste" = "Paste";
+"import.media.jobid.label" = "Job ID";
+"import.media.jobid.placeholder" = "Enter or paste job_id";
+"import.media.jobid.paste" = "Paste job_id";
 "import.media.submit" = "Start Import";
 "import.media.success" = "Job created successfully";
 "import.media.error.title" = "Import failed";
