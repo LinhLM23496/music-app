@@ -49,6 +49,9 @@
 "home.device.music.import" = "Import MP3";
 "home.device.music.import.result" = "Imported %d, skipped %d, failed %d.";
 "home.device.music.import.error" = "Import failed.";
+"home.device.music.view.all" = "View all imported tracks";
+"home.device.music.delete.success" = "Removed from device.";
+"home.device.music.delete.error" = "Cannot remove this file.";
 "device.artist" = "From Device";
 "player.queue" = "Now Playing Queue";
 "player.speed" = "Speed";
