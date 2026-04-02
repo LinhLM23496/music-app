@@ -11,6 +11,7 @@ enum APIClientError: LocalizedError {
     case server(code: String, message: String, statusCode: Int)
     case requestFailed(statusCode: Int)
     case fileSaveFailed
+    case fileSaveFailedUnderlying(String)
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +25,8 @@ enum APIClientError: LocalizedError {
             return "Request failed with status \(statusCode)."
         case .fileSaveFailed:
             return "Failed to save downloaded file."
+        case let .fileSaveFailedUnderlying(message):
+            return "Failed to save downloaded file: \(message)"
         }
     }
 }
@@ -99,14 +102,32 @@ struct URLSessionAPIClient: APIClient {
             throw APIClientError.invalidURL
         }
 
-        let (bytes, response) = try await session.bytes(for: request)
+        onProgress?(0)
+
+        let delegate = DownloadTaskDelegate(onProgress: onProgress)
+        let downloadSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        let task = downloadSession.downloadTask(with: request)
+        defer { downloadSession.finishTasksAndInvalidate() }
+
+        let (tempURL, response): (URL, URLResponse)
+        do {
+            (tempURL, response) = try await withTaskCancellationHandler {
+                try await delegate.result(for: task)
+            } onCancel: {
+                task.cancel()
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw APIClientError.fileSaveFailedUnderlying(error.localizedDescription)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            if let data = try? await collectData(from: bytes),
+            if let data = try? Data(contentsOf: tempURL),
                let apiError = try? JSONDecoder().decode(APIErrorResponse.self, from: data) {
                 throw APIClientError.server(
                     code: apiError.code,
@@ -114,58 +135,26 @@ struct URLSessionAPIClient: APIClient {
                     statusCode: httpResponse.statusCode
                 )
             }
-
             throw APIClientError.requestFailed(statusCode: httpResponse.statusCode)
         }
 
-        let filename = preferredFileName
+        let filename = sanitizedFileName(
+            preferredFileName
             ?? extractFilename(from: httpResponse)
             ?? "job-download-\(UUID().uuidString).bin"
-
+        )
         let destinationFolder = try makeDownloadDirectoryIfNeeded()
         let destinationURL = destinationFolder.appendingPathComponent(filename)
-        let expectedBytes = max(httpResponse.expectedContentLength, 0)
-        var downloadedBytes: Int64 = 0
 
         do {
             if FileManager.default.fileExists(atPath: destinationURL.path) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
-
-            FileManager.default.createFile(atPath: destinationURL.path, contents: nil)
-            let fileHandle = try FileHandle(forWritingTo: destinationURL)
-            defer {
-                try? fileHandle.close()
-            }
-
-            onProgress?(0)
-
-            var buffer = Data()
-            buffer.reserveCapacity(64 * 1024)
-
-            for try await byte in bytes {
-                buffer.append(byte)
-                downloadedBytes += 1
-
-                if buffer.count >= 64 * 1024 {
-                    try fileHandle.write(contentsOf: buffer)
-                    buffer.removeAll(keepingCapacity: true)
-                }
-
-                if expectedBytes > 0 {
-                    let progress = min(max(Double(downloadedBytes) / Double(expectedBytes), 0), 1)
-                    onProgress?(progress)
-                }
-            }
-
-            if !buffer.isEmpty {
-                try fileHandle.write(contentsOf: buffer)
-            }
-
+            try FileManager.default.moveItem(at: tempURL, to: destinationURL)
             onProgress?(1)
             return destinationURL
         } catch {
-            throw APIClientError.fileSaveFailed
+            throw APIClientError.fileSaveFailedUnderlying(error.localizedDescription)
         }
     }
 
@@ -198,11 +187,90 @@ struct URLSessionAPIClient: APIClient {
         return nil
     }
 
-    private func collectData(from bytes: URLSession.AsyncBytes) async throws -> Data {
-        var data = Data()
-        for try await byte in bytes {
-            data.append(byte)
+    private func sanitizedFileName(_ name: String) -> String {
+        let forbidden = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+            .union(.newlines)
+            .union(.controlCharacters)
+        let cleaned = String(name.unicodeScalars.map { forbidden.contains($0) ? "_" : Character($0) })
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return cleaned.isEmpty ? "job-download-\(UUID().uuidString).bin" : cleaned
+    }
+
+}
+
+private final class DownloadTaskDelegate: NSObject, URLSessionDownloadDelegate {
+    private let onProgress: (@Sendable (Double) -> Void)?
+    private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+    private var tempFileURL: URL?
+    private var persistedTempError: Error?
+    private var finished = false
+
+    init(onProgress: (@Sendable (Double) -> Void)?) {
+        self.onProgress = onProgress
+    }
+
+    func result(for task: URLSessionDownloadTask) async throws -> (URL, URLResponse) {
+        try await withCheckedThrowingContinuation { continuation in
+            self.continuation = continuation
+            task.resume()
         }
-        return data
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let progress = min(max(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite), 0), 1)
+        onProgress?(progress)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        let persistedURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("download-\(UUID().uuidString).tmp")
+
+        do {
+            if FileManager.default.fileExists(atPath: persistedURL.path) {
+                try FileManager.default.removeItem(at: persistedURL)
+            }
+            try FileManager.default.moveItem(at: location, to: persistedURL)
+            tempFileURL = persistedURL
+            persistedTempError = nil
+        } catch {
+            tempFileURL = nil
+            persistedTempError = error
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard !finished else { return }
+        finished = true
+
+        if let error {
+            if (error as NSError).code == NSURLErrorCancelled {
+                continuation?.resume(throwing: CancellationError())
+            } else {
+                continuation?.resume(throwing: error)
+            }
+            continuation = nil
+            return
+        }
+
+        guard let tempFileURL, let response = task.response else {
+            if let persistedTempError {
+                continuation?.resume(throwing: persistedTempError)
+            } else {
+                continuation?.resume(throwing: APIClientError.invalidResponse)
+            }
+            continuation = nil
+            return
+        }
+
+        continuation?.resume(returning: (tempFileURL, response))
+        continuation = nil
     }
 }

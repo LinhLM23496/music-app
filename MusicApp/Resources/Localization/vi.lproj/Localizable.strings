@@ -49,6 +49,9 @@
 "home.device.music.import" = "Nhập MP3";
 "home.device.music.import.result" = "Đã nhập %d, bỏ qua %d, lỗi %d.";
 "home.device.music.import.error" = "Nhập file thất bại.";
+"home.device.music.view.all" = "Xem tất cả bài đã nhập";
+"home.device.music.delete.success" = "Đã xóa khỏi danh sách Nhạc trong máy.";
+"home.device.music.delete.error" = "Không thể xóa file này.";
 "device.artist" = "Từ Thiết Bị";
 "player.queue" = "Danh Sách Đang Phát";
 "player.speed" = "Tốc Độ";
@@ -69,6 +72,11 @@
 "import.media.description" = "Dán URL media (YouTube, TikTok, Facebook) rồi gửi để tạo job ingest.";
 "import.media.input.label" = "URL nguồn";
 "import.media.paste" = "Dán";
+"import.media.clear" = "Xóa nhanh";
+"import.media.jobid.label" = "Job ID";
+"import.media.jobid.placeholder" = "Nhập hoặc dán job_id";
+"import.media.jobid.paste" = "Dán job_id";
+"import.media.jobid.clear" = "Xóa nhanh";
 "import.media.submit" = "Bắt đầu import";
 "import.media.success" = "Tạo job thành công";
 "import.media.error.title" = "Import thất bại";
@@ -80,6 +88,10 @@
 "job.tracking.status" = "Trạng thái";
 "job.tracking.progress" = "Tiến trình";
 "job.tracking.source.title" = "Tiêu đề nguồn";
+"job.tracking.source.title.edit" = "Sửa tiêu đề nguồn";
+"job.tracking.source.title.placeholder" = "Nhập tiêu đề mới";
+"job.tracking.source.title.clear" = "Xóa nhanh";
+"job.tracking.source.title.limit" = "Tối đa 50 ký tự.";
 "job.tracking.assets.count" = "Tài nguyên";
 "job.tracking.status.unknown" = "không rõ";
 "job.tracking.copy.success" = "Đã copy job_id";

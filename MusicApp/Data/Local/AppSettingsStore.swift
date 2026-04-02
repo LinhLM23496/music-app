@@ -6,6 +6,7 @@ struct ImportedTrackSnapshot: Codable {
     let fileName: String
     let displayName: String
     let duration: Double
+    let importedAt: Date?
 }
 
 final class AppSettingsStore: ObservableObject {

@@ -52,7 +52,11 @@ protocol MediaJobServicing {
     func createJob(sourceType: MediaSourceType, sourceURL: String, useCookie: Bool) async throws -> String
     func getJobStatus(jobID: String) async throws -> MediaJobStatus
     func getJobResult(jobID: String) async throws -> MediaJobResult
-    func downloadJobAsset(jobID: String, onProgress: (@Sendable (Double) -> Void)?) async throws -> URL
+    func downloadJobAsset(
+        jobID: String,
+        preferredFileName: String?,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL
 }
 
 struct LiveMediaJobService: MediaJobServicing {
@@ -88,8 +92,12 @@ struct LiveMediaJobService: MediaJobServicing {
         return try await apiClient.send(endpoint, as: MediaJobResult.self)
     }
 
-    func downloadJobAsset(jobID: String, onProgress: (@Sendable (Double) -> Void)? = nil) async throws -> URL {
-        let endpoint = MediaJobEndpoints.getJobDownload(jobID: jobID)
+    func downloadJobAsset(
+        jobID: String,
+        preferredFileName: String? = nil,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> URL {
+        let endpoint = MediaJobEndpoints.getJobDownload(jobID: jobID, filename: preferredFileName)
         return try await apiClient.downloadFile(
             endpoint,
             preferredFileName: nil,

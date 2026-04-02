@@ -77,7 +77,22 @@ struct HomeTabView: View {
                     }
 
                     HStack {
-                        sectionTitle(localizationViewModel.t("home.device.music"))
+                        NavigationLink {
+                            DeviceMusicDetailView()
+                                .environmentObject(localizationViewModel)
+                                .environmentObject(importViewModel)
+                                .environmentObject(libraryViewModel)
+                                .environmentObject(playbackController)
+                        } label: {
+                            HStack(spacing: 6) {
+                                sectionTitle(localizationViewModel.t("home.device.music"))
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
                         Spacer()
                         Button(localizationViewModel.t("home.device.music.import")) {
                             showImporter = true
@@ -86,14 +101,16 @@ struct HomeTabView: View {
                         .foregroundStyle(.green)
                     }
 
-                    if importViewModel.importedTracks.isEmpty {
+                    let recentImportedTracks = importViewModel.recentImportedTracks
+
+                    if recentImportedTracks.isEmpty {
                         Text(localizationViewModel.t("home.device.music.empty"))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, 8)
                     } else {
                         VStack(spacing: 10) {
-                            ForEach(importViewModel.importedTracks) { track in
+                            ForEach(recentImportedTracks) { track in
                                 Button {
                                     let importedSong = importViewModel.songForImportedTrack(track)
                                     playbackController.play(
@@ -103,27 +120,12 @@ struct HomeTabView: View {
                                     )
                                     playbackController.presentPlayer()
                                 } label: {
-                                    HStack(spacing: 12) {
-                                        AlbumArtworkView(symbol: "waveform", accent: .green, cornerRadius: 12)
-                                            .frame(width: 58, height: 58)
-
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(track.displayName)
-                                                .font(.headline)
-                                                .lineLimit(1)
-                                            Text(track.fileName)
-                                                .font(.subheadline)
-                                                .foregroundStyle(.secondary)
-                                                .lineLimit(1)
-                                        }
-
-                                        Spacer()
-
-                                        Image(systemName: "play.fill")
-                                            .foregroundStyle(.green)
-                                    }
-                                    .padding(10)
-                                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    let importedSong = importViewModel.songForImportedTrack(track)
+                                    SongRowView(
+                                        song: importedSong,
+                                        title: track.displayName,
+                                        isFavorite: libraryViewModel.favoriteIDs.contains(importedSong.id)
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }

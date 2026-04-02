@@ -1,16 +1,19 @@
 import Foundation
 
 struct PlaylistUseCases {
+    static let maxPlaylistNameLength = 50
+
     func createPlaylist(name: String, in playlists: [Playlist]) -> [Playlist] {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return playlists }
+        let limited = String(trimmed.prefix(Self.maxPlaylistNameLength))
+        guard !limited.isEmpty else { return playlists }
 
         var next = playlists
         next.insert(
             Playlist(
                 id: UUID(),
-                nameEN: trimmed,
-                nameVI: trimmed,
+                nameEN: limited,
+                nameVI: limited,
                 coverSymbol: "music.note.list",
                 songIDs: []
             ),

@@ -1,10 +1,10 @@
 import SwiftUI
-import UIKit
 import Combine
 
 @MainActor
 final class ImportMediaViewModel: ObservableObject {
     @Published var sourceText: String = ""
+    @Published var jobIDText: String = ""
     @Published var useCookie = false
     @Published private(set) var isSubmitting = false
     @Published private(set) var createdJobID: String?
@@ -16,9 +16,14 @@ final class ImportMediaViewModel: ObservableObject {
         self.service = service
     }
 
-    func pasteFromClipboard() {
-        guard let clipboard = UIPasteboard.general.string else { return }
-        sourceText = clipboard
+    func setSourceText(from pastedItems: [String]) {
+        guard let first = pastedItems.first else { return }
+        sourceText = first
+    }
+
+    func setJobIDText(from pastedItems: [String]) {
+        guard let first = pastedItems.first else { return }
+        jobIDText = first
     }
 
     func submit() async {
@@ -99,10 +104,16 @@ struct ImportMediaView: View {
                     Toggle(localizationViewModel.t("import.media.use.cookie"), isOn: $viewModel.useCookie)
 
                     HStack {
-                        Button(localizationViewModel.t("import.media.paste")) {
-                            viewModel.pasteFromClipboard()
+                        PasteButton(payloadType: String.self) { strings in
+                            viewModel.setSourceText(from: strings)
                         }
                         .buttonStyle(.bordered)
+
+                        Button(localizationViewModel.t("import.media.clear")) {
+                            viewModel.sourceText = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.sourceText.isEmpty)
 
                         Spacer()
 
@@ -121,6 +132,47 @@ struct ImportMediaView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
                         .disabled(viewModel.isSubmitting)
+                    }
+                }
+                .padding(14)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(localizationViewModel.t("import.media.jobid.label"))
+                        .font(.subheadline.weight(.semibold))
+
+                    TextField(localizationViewModel.t("import.media.jobid.placeholder"), text: $viewModel.jobIDText)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .padding(10)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                    HStack {
+                        PasteButton(payloadType: String.self) { strings in
+                            viewModel.setJobIDText(from: strings)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button(localizationViewModel.t("import.media.jobid.clear")) {
+                            viewModel.jobIDText = ""
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(viewModel.jobIDText.isEmpty)
+
+                        Spacer()
+
+                        NavigationLink {
+                            JobTrackingView(
+                                jobID: viewModel.jobIDText.trimmingCharacters(in: .whitespacesAndNewlines),
+                                service: service
+                            )
+                            .environmentObject(localizationViewModel)
+                        } label: {
+                            Text(localizationViewModel.t("import.media.track.job"))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .disabled(viewModel.jobIDText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
                 .padding(14)

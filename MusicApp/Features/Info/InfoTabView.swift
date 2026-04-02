@@ -41,17 +41,11 @@ struct InfoTabView: View {
                         Toggle(localizationViewModel.t("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
                         Toggle(localizationViewModel.t("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
 
-                        Button {
-                            if authViewModel.isLoggedIn {
-                                authViewModel.signOut()
-                            } else {
-                                authViewModel.signInDemo()
-                            }
+                        NavigationLink {
+                            ImportMediaView(service: AppContainer.shared.mediaJobService)
+                                .environmentObject(localizationViewModel)
                         } label: {
-                            settingsRow(
-                                authViewModel.isLoggedIn ? localizationViewModel.t("auth.signout") : localizationViewModel.t("auth.signin.demo"),
-                                icon: authViewModel.isLoggedIn ? "rectangle.portrait.and.arrow.right" : "person.crop.circle.badge.plus"
-                            )
+                            settingsRow(localizationViewModel.t("info.import.media"), icon: "square.and.arrow.down")
                         }
 
                         Button {
@@ -69,11 +63,17 @@ struct InfoTabView: View {
                             settingsRow(localizationViewModel.t("info.help"), icon: "questionmark.circle")
                         }
 
-                        NavigationLink {
-                            ImportMediaView(service: AppContainer.shared.mediaJobService)
-                                .environmentObject(localizationViewModel)
+                        Button {
+                            if authViewModel.isLoggedIn {
+                                authViewModel.signOut()
+                            } else {
+                                authViewModel.signInDemo()
+                            }
                         } label: {
-                            settingsRow(localizationViewModel.t("info.import.media"), icon: "square.and.arrow.down")
+                            settingsRow(
+                                authViewModel.isLoggedIn ? localizationViewModel.t("auth.signout") : localizationViewModel.t("auth.signin.demo"),
+                                icon: authViewModel.isLoggedIn ? "rectangle.portrait.and.arrow.right" : "person.crop.circle.badge.plus"
+                            )
                         }
                     }
                     .tint(.green)

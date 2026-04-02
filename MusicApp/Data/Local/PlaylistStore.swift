@@ -11,13 +11,14 @@ final class PlaylistStore: ObservableObject {
 
     func createPlaylist(name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let limited = String(trimmed.prefix(PlaylistUseCases.maxPlaylistNameLength))
+        guard !limited.isEmpty else { return }
 
         playlists.insert(
             Playlist(
                 id: UUID(),
-                nameEN: trimmed,
-                nameVI: trimmed,
+                nameEN: limited,
+                nameVI: limited,
                 coverSymbol: "music.note.list",
                 songIDs: []
             ),

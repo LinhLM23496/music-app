@@ -52,6 +52,7 @@ struct LocalAudioTrack: Identifiable, Hashable {
     let fileName: String
     let displayName: String
     let duration: Double
+    let importedAt: Date
 }
 
 enum RepeatMode: String, CaseIterable, Codable {

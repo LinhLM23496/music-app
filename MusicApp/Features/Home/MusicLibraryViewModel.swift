@@ -25,6 +25,10 @@ final class ImportViewModel: ObservableObject {
         importedTracks.map(songForImportedTrack)
     }
 
+    var recentImportedTracks: [LocalAudioTrack] {
+        Array(importedTracks.prefix(5))
+    }
+
     private let settingsStore: AppSettingsStore
     private let ioQueue = DispatchQueue(label: "com.musicapp.audio-io", qos: .userInitiated)
     private var shouldPersistImportedTracks = false
@@ -45,6 +49,15 @@ final class ImportViewModel: ObservableObject {
 
     func importAudioFiles(from urls: [URL], completion: @escaping (ImportResult) -> Void) {
         ensureMusicStorageFolderExists()
+        let documentsPathPrefix: String? = {
+            guard
+                let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+                    .standardizedFileURL
+            else {
+                return nil
+            }
+            return documentsURL.path.hasSuffix("/") ? documentsURL.path : documentsURL.path + "/"
+        }()
 
         guard let destinationFolder = musicStorageFolderURL() else {
             completion(ImportResult(importedCount: 0, skippedCount: 0, failedCount: urls.count))
@@ -75,23 +88,35 @@ final class ImportViewModel: ObservableObject {
                 let destinationURL = destinationFolder.appendingPathComponent(sourceURL.lastPathComponent)
 
                 do {
-                    let isSamePath = sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path
+                    let sourceInDocuments = documentsPathPrefix.map {
+                        sourceURL.standardizedFileURL.path.hasPrefix($0)
+                    } ?? false
+                    let resolvedURL: URL
 
-                    if !isSamePath, FileManager.default.fileExists(atPath: destinationURL.path) {
-                        try FileManager.default.removeItem(at: destinationURL)
-                    }
-                    if !isSamePath {
-                        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                    if sourceInDocuments {
+                        // The file is already inside app-managed storage (for example Downloads),
+                        // so keep the original path to avoid creating a duplicate copy.
+                        resolvedURL = sourceURL.standardizedFileURL
+                    } else {
+                        let isSamePath = sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path
+                        if !isSamePath, FileManager.default.fileExists(atPath: destinationURL.path) {
+                            try FileManager.default.removeItem(at: destinationURL)
+                        }
+                        if !isSamePath {
+                            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+                        }
+                        resolvedURL = destinationURL.standardizedFileURL
                     }
 
                     imported += 1
                     importedResults.append(
                         LocalAudioTrack(
-                            id: destinationURL,
-                            url: destinationURL,
-                            fileName: destinationURL.lastPathComponent,
-                            displayName: destinationURL.deletingPathExtension().lastPathComponent,
-                            duration: 180
+                            id: resolvedURL,
+                            url: resolvedURL,
+                            fileName: resolvedURL.lastPathComponent,
+                            displayName: resolvedURL.deletingPathExtension().lastPathComponent,
+                            duration: 180,
+                            importedAt: Date()
                         )
                     )
                 } catch {
@@ -112,9 +137,7 @@ final class ImportViewModel: ObservableObject {
                 for track in finalizedImportedResults {
                     mergedByPath[track.url.path] = track
                 }
-                self.importedTracks = mergedByPath.values.sorted {
-                    $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-                }
+                self.importedTracks = self.sortedTracksByMostRecent(Array(mergedByPath.values))
                 completion(result)
             }
         }
@@ -142,6 +165,14 @@ final class ImportViewModel: ObservableObject {
             duration: track.duration,
             accent: .green
         )
+    }
+
+    func deleteImportedTrack(_ track: LocalAudioTrack, completion: ((Bool) -> Void)? = nil) {
+        let trackPath = track.url.standardizedFileURL.path
+        importedTracks.removeAll {
+            $0.url.standardizedFileURL.path == trackPath
+        }
+        completion?(true)
     }
 
     private func musicStorageFolderURL() -> URL? {
@@ -177,14 +208,16 @@ final class ImportViewModel: ObservableObject {
         let storageFolder = musicStorageFolderURL()
         let restored = settingsStore.loadImportedTracks()
             .compactMap { snapshot -> LocalAudioTrack? in
-                let preferredURL = storageFolder?.appendingPathComponent(snapshot.fileName)
+                let recordedURL = URL(fileURLWithPath: snapshot.filePath)
+                let preferredURL = storageFolder?.appendingPathComponent(snapshot.fileName).standardizedFileURL
                 let resolvedURL: URL?
 
-                if let preferredURL, FileManager.default.fileExists(atPath: preferredURL.path) {
+                if FileManager.default.fileExists(atPath: recordedURL.path) {
+                    resolvedURL = recordedURL
+                } else if let preferredURL, FileManager.default.fileExists(atPath: preferredURL.path) {
                     resolvedURL = preferredURL
                 } else {
-                    let legacyURL = URL(fileURLWithPath: snapshot.filePath)
-                    resolvedURL = FileManager.default.fileExists(atPath: legacyURL.path) ? legacyURL : nil
+                    resolvedURL = nil
                 }
 
                 guard let resolvedURL else { return nil }
@@ -193,13 +226,12 @@ final class ImportViewModel: ObservableObject {
                     url: resolvedURL,
                     fileName: snapshot.fileName,
                     displayName: snapshot.displayName,
-                    duration: snapshot.duration
+                    duration: snapshot.duration,
+                    importedAt: snapshot.importedAt ?? fileLastModifiedDate(for: resolvedURL)
                 )
             }
 
-        importedTracks = restored.sorted {
-            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-        }
+        importedTracks = sortedTracksByMostRecent(restored)
     }
 
     private func persistImportedTracks() {
@@ -208,7 +240,8 @@ final class ImportViewModel: ObservableObject {
                 filePath: $0.url.path,
                 fileName: $0.fileName,
                 displayName: $0.displayName,
-                duration: $0.duration
+                duration: $0.duration,
+                importedAt: $0.importedAt
             )
         }
         settingsStore.saveImportedTracks(snapshots)
@@ -228,6 +261,23 @@ final class ImportViewModel: ObservableObject {
         )
         return UUID(uuid: uuid)
     }
+
+    private func sortedTracksByMostRecent(_ tracks: [LocalAudioTrack]) -> [LocalAudioTrack] {
+        tracks.sorted {
+            let lhsDate = $0.importedAt
+            let rhsDate = $1.importedAt
+            if lhsDate == rhsDate {
+                return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+            }
+            return lhsDate > rhsDate
+        }
+    }
+
+    private func fileLastModifiedDate(for url: URL) -> Date {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])
+        return values?.contentModificationDate ?? values?.creationDate ?? .distantPast
+    }
+
 }
 
 @MainActor
