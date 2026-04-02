@@ -11,6 +11,7 @@ struct ContentView: View {
     @StateObject private var authViewModel: AuthViewModel
     @StateObject private var libraryViewModel: LibraryViewModel
     @StateObject private var playbackController: PlaybackController
+    @StateObject private var downloadCenter: DownloadCenter
 
     init() {
         let container = AppContainer.shared
@@ -67,6 +68,7 @@ struct ContentView: View {
         _playlistViewModel = StateObject(wrappedValue: playlistViewModel)
         _authViewModel = StateObject(wrappedValue: container.makeAuthViewModel())
         _libraryViewModel = StateObject(wrappedValue: libraryViewModel)
+        _downloadCenter = StateObject(wrappedValue: container.downloadCenter)
     }
 
     var body: some View {
@@ -129,8 +131,40 @@ struct ContentView: View {
                 .transition(.asymmetric(insertion: .opacity, removal: .opacity))
                 .zIndex(10)
             }
+
+            if downloadCenter.showResumePrompt {
+                VStack {
+                    HStack(spacing: 10) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(localizationViewModel.t("downloads.resume.prompt"))
+                            .font(.subheadline)
+                            .lineLimit(2)
+                        Spacer(minLength: 8)
+                        Button(localizationViewModel.t("downloads.resume.no")) {
+                            downloadCenter.dismissResumePrompt()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                        Button(localizationViewModel.t("downloads.resume.yes")) {
+                            downloadCenter.resumeInterruptedJobs()
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.green)
+                    }
+                    .padding(12)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(20)
+            }
         }
         .animation(playerHeroAnimation, value: playbackController.isPlayerSheetVisible)
+        .animation(.easeInOut(duration: 0.22), value: downloadCenter.showResumePrompt)
         .tint(.green)
         .preferredColorScheme(.dark)
         .environmentObject(localizationViewModel)
@@ -140,6 +174,7 @@ struct ContentView: View {
         .environmentObject(authViewModel)
         .environmentObject(libraryViewModel)
         .environmentObject(playbackController)
+        .environmentObject(downloadCenter)
         .onAppear {
             if scenePhase == .active {
                 playbackController.restoreSnapshotIfNeeded()

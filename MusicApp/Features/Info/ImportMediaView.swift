@@ -75,6 +75,7 @@ final class ImportMediaViewModel: ObservableObject {
 
 struct ImportMediaView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
+    @EnvironmentObject private var downloadCenter: DownloadCenter
     @StateObject private var viewModel: ImportMediaViewModel
     private let service: MediaJobServicing
 
@@ -223,6 +224,16 @@ struct ImportMediaView: View {
         .background(Color.black.ignoresSafeArea())
         .navigationTitle(localizationViewModel.t("import.media.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: viewModel.createdJobID) { _, jobID in
+            guard let jobID else { return }
+            let source = viewModel.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = sourceTitleFallback(from: source, fallbackJobID: jobID)
+            downloadCenter.enqueue(
+                jobID: jobID,
+                sourceURL: source.isEmpty ? nil : source,
+                title: title
+            )
+        }
     }
 
     private func localizedErrorMessage(_ message: String) -> String {
@@ -231,5 +242,12 @@ struct ImportMediaView: View {
         }
 
         return message
+    }
+
+    private func sourceTitleFallback(from sourceURL: String, fallbackJobID: String) -> String {
+        if let host = URL(string: sourceURL)?.host, !host.isEmpty {
+            return host
+        }
+        return "job-\(fallbackJobID.prefix(8))"
     }
 }

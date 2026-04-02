@@ -134,8 +134,10 @@ final class JobTrackingViewModel: ObservableObject {
 
 struct JobTrackingView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
+    @EnvironmentObject private var downloadCenter: DownloadCenter
     @StateObject private var viewModel: JobTrackingViewModel
     @State private var showCopiedToast = false
+    @State private var showQueuedToast = false
     @State private var showEditTitlePopup = false
     @State private var editedTitleDraft = ""
     @State private var toastWorkItem: DispatchWorkItem?
@@ -201,36 +203,14 @@ struct JobTrackingView: View {
 
                                 if status.status == .done {
                                     Button {
-                                        Task {
-                                            await viewModel.downloadAsset()
-                                        }
+                                        enqueueCurrentJob()
                                     } label: {
-                                        if viewModel.isDownloading {
-                                            Text(
-                                                "\(localizationViewModel.t("job.tracking.download.progress")): \(Int(viewModel.downloadProgress * 100))%"
-                                            )
+                                        Text(localizationViewModel.t("job.tracking.download.queue"))
                                             .font(.subheadline.weight(.semibold))
                                             .frame(maxWidth: .infinity)
-                                        } else {
-                                            Text(localizationViewModel.t("job.tracking.download"))
-                                                .font(.subheadline.weight(.semibold))
-                                                .frame(maxWidth: .infinity)
-                                        }
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .tint(.green)
-                                    .disabled(viewModel.isDownloading)
-
-                                    if viewModel.isDownloading {
-                                        ProgressView(value: viewModel.downloadProgress)
-                                            .tint(.green)
-
-                                        Text(
-                                            "\(localizationViewModel.t("job.tracking.download.progress")): \(Int(viewModel.downloadProgress * 100))%"
-                                        )
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-                                    }
                                 }
                             }
                         } else if viewModel.isLoading {
@@ -274,9 +254,14 @@ struct JobTrackingView: View {
                 AppToastView(message: localizationViewModel.t("job.tracking.copy.success"))
                     .padding(.top, 14)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if showQueuedToast {
+                AppToastView(message: localizationViewModel.t("job.tracking.download.queued"))
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.22), value: showCopiedToast)
+        .animation(.easeInOut(duration: 0.22), value: showQueuedToast)
         .alert(localizationViewModel.t("job.tracking.source.title.edit"), isPresented: $showEditTitlePopup) {
             TextField(localizationViewModel.t("job.tracking.source.title.placeholder"), text: $editedTitleDraft)
             Button(localizationViewModel.t("job.tracking.source.title.clear")) {
@@ -326,6 +311,21 @@ struct JobTrackingView: View {
 
         let workItem = DispatchWorkItem {
             showCopiedToast = false
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: workItem)
+    }
+
+    private func enqueueCurrentJob() {
+        let title = viewModel.displaySourceTitle ?? "job-\(viewModel.jobID.prefix(8))"
+        downloadCenter.enqueue(jobID: viewModel.jobID, sourceURL: nil, title: title)
+
+        toastWorkItem?.cancel()
+        showCopiedToast = false
+        showQueuedToast = true
+
+        let workItem = DispatchWorkItem {
+            showQueuedToast = false
         }
         toastWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: workItem)

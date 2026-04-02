@@ -48,6 +48,24 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var allowCellularDownloads: Bool {
+        didSet {
+            defaults.set(allowCellularDownloads, forKey: Keys.allowCellularDownloads)
+        }
+    }
+
+    @Published var pauseDownloadsOnLowPowerMode: Bool {
+        didSet {
+            defaults.set(pauseDownloadsOnLowPowerMode, forKey: Keys.pauseDownloadsOnLowPowerMode)
+        }
+    }
+
+    @Published var autoResumeDownloads: Bool {
+        didSet {
+            defaults.set(autoResumeDownloads, forKey: Keys.autoResumeDownloads)
+        }
+    }
+
     private let defaults: UserDefaults
 
     private enum Keys {
@@ -58,6 +76,9 @@ final class AppSettingsStore: ObservableObject {
         static let repeatMode = "settings.repeat_mode"
         static let didRunInitialMusicScan = "settings.did_run_initial_music_scan"
         static let importedTracks = "settings.imported_tracks"
+        static let allowCellularDownloads = "settings.allow_cellular_downloads"
+        static let pauseDownloadsOnLowPowerMode = "settings.pause_downloads_low_power"
+        static let autoResumeDownloads = "settings.auto_resume_downloads"
     }
 
     private init(defaults: UserDefaults = .standard) {
@@ -86,6 +107,9 @@ final class AppSettingsStore: ObservableObject {
         }
 
         didRunInitialMusicScan = defaults.object(forKey: Keys.didRunInitialMusicScan) as? Bool ?? false
+        allowCellularDownloads = defaults.object(forKey: Keys.allowCellularDownloads) as? Bool ?? false
+        pauseDownloadsOnLowPowerMode = defaults.object(forKey: Keys.pauseDownloadsOnLowPowerMode) as? Bool ?? true
+        autoResumeDownloads = defaults.object(forKey: Keys.autoResumeDownloads) as? Bool ?? true
     }
 
     func saveImportedTracks(_ tracks: [ImportedTrackSnapshot]) {

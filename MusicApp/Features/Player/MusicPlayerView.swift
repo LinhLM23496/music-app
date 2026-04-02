@@ -222,7 +222,12 @@ struct MusicPlayerView: View {
                     playbackController.playFromQueue(at: index)
                 } label: {
                     HStack(spacing: 12) {
-                        AlbumArtworkView(symbol: queueSong.coverSymbol, accent: queueSong.accent, cornerRadius: 10)
+                        AlbumArtworkView(
+                            symbol: queueSong.coverSymbol,
+                            accent: queueSong.accent,
+                            localFilePath: queueSong.localFilePath,
+                            cornerRadius: 10
+                        )
                             .frame(width: 44, height: 44)
 
                         VStack(alignment: .leading, spacing: 3) {
@@ -287,7 +292,12 @@ private struct PlayerArtworkView: View {
 
     var body: some View {
         ZStack {
-            AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 24)
+            AlbumArtworkView(
+                symbol: song.coverSymbol,
+                accent: song.accent,
+                localFilePath: song.localFilePath,
+                cornerRadius: 24
+            )
         }
             .frame(width: 300, height: 300)
             .matchedGeometryEffect(id: "player.artwork.\(song.id.uuidString)", in: heroNamespace)
