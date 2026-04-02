@@ -50,7 +50,7 @@
 "home.device.music.import.result" = "Đã nhập %d, bỏ qua %d, lỗi %d.";
 "home.device.music.import.error" = "Nhập file thất bại.";
 "home.device.music.view.all" = "Xem tất cả bài đã nhập";
-"home.device.music.delete.success" = "Đã xóa khỏi máy.";
+"home.device.music.delete.success" = "Đã xóa khỏi danh sách Nhạc trong máy.";
 "home.device.music.delete.error" = "Không thể xóa file này.";
 "device.artist" = "Từ Thiết Bị";
 "player.queue" = "Danh Sách Đang Phát";

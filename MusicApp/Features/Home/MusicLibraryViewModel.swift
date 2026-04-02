@@ -115,7 +115,8 @@ final class ImportViewModel: ObservableObject {
                             url: resolvedURL,
                             fileName: resolvedURL.lastPathComponent,
                             displayName: resolvedURL.deletingPathExtension().lastPathComponent,
-                            duration: 180
+                            duration: 180,
+                            importedAt: Date()
                         )
                     )
                 } catch {
@@ -167,38 +168,11 @@ final class ImportViewModel: ObservableObject {
     }
 
     func deleteImportedTrack(_ track: LocalAudioTrack, completion: ((Bool) -> Void)? = nil) {
-        let trackURL = track.url.standardizedFileURL
-
-        ioQueue.async { [weak self] in
-            guard let self else {
-                Task { @MainActor in completion?(false) }
-                return
-            }
-
-            let exists = FileManager.default.fileExists(atPath: trackURL.path)
-            var didDeleteFile = !exists
-
-            if exists {
-                do {
-                    try FileManager.default.removeItem(at: trackURL)
-                    didDeleteFile = true
-                } catch {
-                    didDeleteFile = false
-                }
-            }
-
-            let deletionSucceeded = didDeleteFile
-            Task { @MainActor in
-                guard deletionSucceeded else {
-                    completion?(false)
-                    return
-                }
-                self.importedTracks.removeAll {
-                    $0.url.standardizedFileURL.path == trackURL.path
-                }
-                completion?(true)
-            }
+        let trackPath = track.url.standardizedFileURL.path
+        importedTracks.removeAll {
+            $0.url.standardizedFileURL.path == trackPath
         }
+        completion?(true)
     }
 
     private func musicStorageFolderURL() -> URL? {
@@ -252,7 +226,8 @@ final class ImportViewModel: ObservableObject {
                     url: resolvedURL,
                     fileName: snapshot.fileName,
                     displayName: snapshot.displayName,
-                    duration: snapshot.duration
+                    duration: snapshot.duration,
+                    importedAt: snapshot.importedAt ?? fileLastModifiedDate(for: resolvedURL)
                 )
             }
 
@@ -265,7 +240,8 @@ final class ImportViewModel: ObservableObject {
                 filePath: $0.url.path,
                 fileName: $0.fileName,
                 displayName: $0.displayName,
-                duration: $0.duration
+                duration: $0.duration,
+                importedAt: $0.importedAt
             )
         }
         settingsStore.saveImportedTracks(snapshots)
@@ -288,8 +264,8 @@ final class ImportViewModel: ObservableObject {
 
     private func sortedTracksByMostRecent(_ tracks: [LocalAudioTrack]) -> [LocalAudioTrack] {
         tracks.sorted {
-            let lhsDate = fileLastModifiedDate(for: $0.url)
-            let rhsDate = fileLastModifiedDate(for: $1.url)
+            let lhsDate = $0.importedAt
+            let rhsDate = $1.importedAt
             if lhsDate == rhsDate {
                 return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
             }
