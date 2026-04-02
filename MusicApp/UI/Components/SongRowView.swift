@@ -7,7 +7,12 @@ struct SongRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 12)
+            AlbumArtworkView(
+                symbol: song.coverSymbol,
+                accent: song.accent,
+                localFilePath: song.localFilePath,
+                cornerRadius: 12
+            )
                 .frame(width: 58, height: 58)
 
             VStack(alignment: .leading, spacing: 4) {

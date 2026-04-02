@@ -25,7 +25,12 @@ struct MiniPlayerBarView: View {
                     Button(action: handleOpenTap) {
                         HStack(spacing: 12) {
                             ZStack {
-                                AlbumArtworkView(symbol: song.coverSymbol, accent: song.accent, cornerRadius: 10)
+                                AlbumArtworkView(
+                                    symbol: song.coverSymbol,
+                                    accent: song.accent,
+                                    localFilePath: song.localFilePath,
+                                    cornerRadius: 10
+                                )
                             }
                             .frame(width: 46, height: 46)
                             .matchedGeometryEffect(id: "player.artwork.\(song.id.uuidString)", in: heroNamespace)

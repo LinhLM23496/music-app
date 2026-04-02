@@ -40,6 +40,16 @@ struct InfoTabView: View {
 
                         Toggle(localizationViewModel.t("info.push.notifications"), isOn: $settingsStore.pushNotificationsEnabled)
                         Toggle(localizationViewModel.t("info.auto.play"), isOn: $settingsStore.autoPlayEnabled)
+                        Toggle(localizationViewModel.t("downloads.settings.cellular"), isOn: $settingsStore.allowCellularDownloads)
+                        Toggle(localizationViewModel.t("downloads.settings.low.power"), isOn: $settingsStore.pauseDownloadsOnLowPowerMode)
+                        Toggle(localizationViewModel.t("downloads.settings.auto.resume"), isOn: $settingsStore.autoResumeDownloads)
+
+                        NavigationLink {
+                            DownloadListView()
+                                .environmentObject(localizationViewModel)
+                        } label: {
+                            settingsRow(localizationViewModel.t("info.download.list"), icon: "arrow.down.circle")
+                        }
 
                         NavigationLink {
                             ImportMediaView(service: AppContainer.shared.mediaJobService)

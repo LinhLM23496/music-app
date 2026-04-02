@@ -39,6 +39,7 @@
 "info.account" = "Account";
 "info.privacy" = "Privacy";
 "info.help" = "Help";
+"info.download.list" = "Download List";
 
 "player.now.playing" = "Now Playing";
 "repeat.off" = "Repeat Off";
@@ -96,6 +97,34 @@
 "job.tracking.status.unknown" = "unknown";
 "job.tracking.copy.success" = "Copied job_id";
 "job.tracking.download" = "Download";
+"job.tracking.download.queue" = "Add to Download Queue";
+"job.tracking.download.queued" = "Added to download queue";
 "job.tracking.downloaded.path" = "Saved";
 "import.media.use.cookie" = "Use Cookie";
 "job.tracking.download.progress" = "Download progress";
+
+"downloads.title" = "Downloads";
+"downloads.section.active" = "Active";
+"downloads.section.failed" = "Failed";
+"downloads.section.completed" = "Completed";
+"downloads.empty" = "No downloads yet.";
+"downloads.clear.completed" = "Clear Completed";
+"downloads.cancel.confirm.title" = "Cancel this download?";
+"downloads.cancel.confirm.message" = "This job will be removed from queue.";
+"downloads.cancel.confirm.button" = "Cancel Download";
+"downloads.detail.title" = "Download Detail";
+"downloads.detail.job_id" = "Job ID";
+"downloads.detail.state" = "State";
+"downloads.detail.progress" = "Progress";
+"downloads.detail.retry" = "Retry Count";
+"downloads.detail.source" = "Source URL";
+"downloads.detail.file" = "Saved File";
+"downloads.detail.error" = "Error";
+"downloads.resume.prompt" = "You have interrupted downloads. Resume now?";
+"downloads.resume.yes" = "Resume";
+"downloads.resume.no" = "Later";
+"downloads.action.pause.all" = "Pause All";
+"downloads.action.resume.all" = "Resume All";
+"downloads.settings.cellular" = "Allow Cellular Downloads";
+"downloads.settings.low.power" = "Pause on Low Power Mode";
+"downloads.settings.auto.resume" = "Auto Resume Downloads";

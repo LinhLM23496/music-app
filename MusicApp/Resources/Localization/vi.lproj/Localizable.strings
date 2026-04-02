@@ -39,6 +39,7 @@
 "info.account" = "Tài Khoản";
 "info.privacy" = "Quyền Riêng Tư";
 "info.help" = "Trợ Giúp";
+"info.download.list" = "Danh Sách Tải";
 
 "player.now.playing" = "Đang Phát";
 "repeat.off" = "Tắt lặp";
@@ -96,6 +97,34 @@
 "job.tracking.status.unknown" = "không rõ";
 "job.tracking.copy.success" = "Đã copy job_id";
 "job.tracking.download" = "Tải xuống";
+"job.tracking.download.queue" = "Thêm vào hàng đợi tải";
+"job.tracking.download.queued" = "Đã thêm vào hàng đợi tải";
 "job.tracking.downloaded.path" = "Đã lưu";
 "import.media.use.cookie" = "Dùng Cookie";
 "job.tracking.download.progress" = "Tiến trình tải";
+
+"downloads.title" = "Tải Xuống";
+"downloads.section.active" = "Đang Chạy";
+"downloads.section.failed" = "Lỗi";
+"downloads.section.completed" = "Hoàn Tất";
+"downloads.empty" = "Chưa có tải xuống nào.";
+"downloads.clear.completed" = "Xóa Đã Xong";
+"downloads.cancel.confirm.title" = "Hủy tải mục này?";
+"downloads.cancel.confirm.message" = "Job này sẽ bị gỡ khỏi hàng đợi.";
+"downloads.cancel.confirm.button" = "Hủy Tải";
+"downloads.detail.title" = "Chi Tiết Tải";
+"downloads.detail.job_id" = "Job ID";
+"downloads.detail.state" = "Trạng thái";
+"downloads.detail.progress" = "Tiến trình";
+"downloads.detail.retry" = "Số lần thử lại";
+"downloads.detail.source" = "URL nguồn";
+"downloads.detail.file" = "File đã lưu";
+"downloads.detail.error" = "Lỗi";
+"downloads.resume.prompt" = "Có tải xuống bị gián đoạn. Tiếp tục ngay?";
+"downloads.resume.yes" = "Tiếp tục";
+"downloads.resume.no" = "Để sau";
+"downloads.action.pause.all" = "Tạm dừng tất cả";
+"downloads.action.resume.all" = "Tiếp tục tất cả";
+"downloads.settings.cellular" = "Cho phép tải bằng 4G/5G";
+"downloads.settings.low.power" = "Dừng khi pin thấp";
+"downloads.settings.auto.resume" = "Tự động tiếp tục tải";
