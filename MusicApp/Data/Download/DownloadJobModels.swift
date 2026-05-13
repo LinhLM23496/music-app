@@ -3,6 +3,7 @@ import Foundation
 enum DownloadJobState: String, Codable, CaseIterable {
     case queued
     case processing
+    case ready
     case downloading
     case paused
     case completed
@@ -20,7 +21,7 @@ enum DownloadJobState: String, Codable, CaseIterable {
 
 struct DownloadJob: Identifiable, Codable, Hashable {
     let id: UUID
-    let remoteJobID: String
+    var remoteJobID: String
     var sourceURL: String?
     var title: String
     var state: DownloadJobState

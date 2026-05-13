@@ -51,7 +51,7 @@ final class DownloadCenter: ObservableObject {
     }
 
     var activeJobs: [DownloadJob] {
-        jobs.filter { [.queued, .processing, .downloading, .paused].contains($0.state) }
+        jobs.filter { [.queued, .processing, .ready, .downloading, .paused].contains($0.state) }
     }
 
     var failedJobs: [DownloadJob] {
@@ -76,8 +76,15 @@ final class DownloadCenter: ObservableObject {
         if let existing = jobs.first(where: { $0.remoteJobID == jobID && $0.state != .canceled }) {
             if existing.state == .failed || existing.state == .paused {
                 retry(jobID: existing.id)
+                return
             }
-            return
+
+            // Active/in-flight jobs with the same remote id should not be duplicated.
+            if existing.state == .queued || existing.state == .processing || existing.state == .ready || existing.state == .downloading {
+                return
+            }
+
+            // Completed jobs are allowed to be queued again as a new download item.
         }
 
         let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,6 +138,29 @@ final class DownloadCenter: ObservableObject {
 
     func retry(jobID: UUID) {
         guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
+        let sourceURL = jobs[index].sourceURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        // If this item originated from "Import URL", retry should create a new remote job
+        // and replace the old remoteJobID before scheduling download again.
+        if !sourceURL.isEmpty, URL(string: sourceURL) != nil {
+            jobs[index].state = .processing
+            jobs[index].errorMessage = nil
+            jobs[index].jobProgressPercent = 0
+            jobs[index].downloadProgress = 0
+            jobs[index].localFilePath = nil
+            jobs[index].retryCount = 0
+            jobs[index].backoffUntil = nil
+            jobs[index].wasInterrupted = false
+            jobs[index].updatedAt = Date()
+            persist()
+
+            Task { [weak self] in
+                guard let self else { return }
+                await recreateRemoteJobAndQueue(jobID: jobID, sourceURL: sourceURL)
+            }
+            return
+        }
+
         jobs[index].state = .queued
         jobs[index].errorMessage = nil
         jobs[index].jobProgressPercent = 0
@@ -183,6 +213,23 @@ final class DownloadCenter: ObservableObject {
         showResumePrompt = false
     }
 
+    func queueReadyJobForDownload(jobID: UUID, title: String?) {
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { return }
+        guard jobs[index].state == .ready else { return }
+
+        let normalizedTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !normalizedTitle.isEmpty {
+            jobs[index].title = normalizedTitle
+        }
+        jobs[index].state = .queued
+        jobs[index].downloadProgress = 0
+        jobs[index].localFilePath = nil
+        jobs[index].errorMessage = nil
+        jobs[index].updatedAt = Date()
+        persist()
+        scheduleIfNeeded()
+    }
+
     private func scheduleIfNeeded() {
         guard !shouldPauseForPolicy else {
             return
@@ -233,6 +280,11 @@ final class DownloadCenter: ObservableObject {
         }
 
         do {
+            if jobSnapshot.jobProgressPercent >= 100 {
+                try await performLocalDownload(jobSnapshot: jobSnapshot)
+                return
+            }
+
             while true {
                 try Task.checkCancellation()
                 if shouldPauseForPolicy {
@@ -268,40 +320,23 @@ final class DownloadCenter: ObservableObject {
                 try await Task.sleep(nanoseconds: Constants.pollIntervalNs)
             }
 
+            let result = try await service.getJobResult(jobID: jobSnapshot.remoteJobID)
             await MainActor.run {
                 if let idx = jobs.firstIndex(where: { $0.id == jobSnapshot.id }) {
-                    jobs[idx].state = .downloading
-                    jobs[idx].downloadProgress = 0
-                    jobs[idx].updatedAt = Date()
-                    persist()
-                }
-            }
-
-            let fileURL = try await service.downloadJobAsset(
-                jobID: jobSnapshot.remoteJobID,
-                preferredFileName: sanitizedTitleForFilename(jobSnapshot.title),
-                onProgress: { [weak self] progress in
-                    guard let self else { return }
-                    Task { @MainActor in
-                        guard let idx = self.jobs.firstIndex(where: { $0.id == jobSnapshot.id }) else { return }
-                        self.jobs[idx].downloadProgress = progress
-                        self.jobs[idx].updatedAt = Date()
-                        self.persist()
+                    let sourceTitle = result.sourceMeta?.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !sourceTitle.isEmpty {
+                        jobs[idx].title = String(sourceTitle.prefix(80))
                     }
-                }
-            )
-
-            await MainActor.run {
-                if let idx = jobs.firstIndex(where: { $0.id == jobSnapshot.id }) {
-                    jobs[idx].state = .completed
-                    jobs[idx].downloadProgress = 1
-                    jobs[idx].localFilePath = fileURL.path
+                    jobs[idx].state = .ready
+                    jobs[idx].jobProgressPercent = 100
+                    jobs[idx].downloadProgress = 0
                     jobs[idx].errorMessage = nil
                     jobs[idx].backoffUntil = nil
                     jobs[idx].updatedAt = Date()
                     persist()
                 }
             }
+            return
         } catch is CancellationError {
             // user action
         } catch {
@@ -324,6 +359,44 @@ final class DownloadCenter: ObservableObject {
 
                 jobs[idx].state = .failed
                 jobs[idx].errorMessage = error.localizedDescription
+                jobs[idx].updatedAt = Date()
+                persist()
+            }
+        }
+    }
+
+    private func performLocalDownload(jobSnapshot: DownloadJob) async throws {
+        await MainActor.run {
+            if let idx = jobs.firstIndex(where: { $0.id == jobSnapshot.id }) {
+                jobs[idx].state = .downloading
+                jobs[idx].downloadProgress = 0
+                jobs[idx].errorMessage = nil
+                jobs[idx].updatedAt = Date()
+                persist()
+            }
+        }
+
+        let fileURL = try await service.downloadJobAsset(
+            jobID: jobSnapshot.remoteJobID,
+            preferredFileName: sanitizedTitleForFilename(jobSnapshot.title),
+            onProgress: { [weak self] progress in
+                guard let self else { return }
+                Task { @MainActor in
+                    guard let idx = self.jobs.firstIndex(where: { $0.id == jobSnapshot.id }) else { return }
+                    self.jobs[idx].downloadProgress = progress
+                    self.jobs[idx].updatedAt = Date()
+                    self.persist()
+                }
+            }
+        )
+
+        await MainActor.run {
+            if let idx = jobs.firstIndex(where: { $0.id == jobSnapshot.id }) {
+                jobs[idx].state = .completed
+                jobs[idx].downloadProgress = 1
+                jobs[idx].localFilePath = fileURL.path
+                jobs[idx].errorMessage = nil
+                jobs[idx].backoffUntil = nil
                 jobs[idx].updatedAt = Date()
                 persist()
             }
@@ -384,6 +457,46 @@ final class DownloadCenter: ObservableObject {
             return "\(base).mp3"
         }
         return base
+    }
+
+    private func recreateRemoteJobAndQueue(jobID: UUID, sourceURL: String) async {
+        do {
+            let sourceType = detectSourceType(from: sourceURL)
+            let newRemoteJobID = try await service.createJob(
+                sourceType: sourceType,
+                sourceURL: sourceURL,
+                useCookie: false
+            )
+
+            guard let idx = jobs.firstIndex(where: { $0.id == jobID }) else { return }
+            jobs[idx].remoteJobID = newRemoteJobID
+            jobs[idx].state = .queued
+            jobs[idx].updatedAt = Date()
+            persist()
+            scheduleIfNeeded()
+        } catch {
+            guard let idx = jobs.firstIndex(where: { $0.id == jobID }) else { return }
+            jobs[idx].state = .failed
+            jobs[idx].errorMessage = error.localizedDescription
+            jobs[idx].updatedAt = Date()
+            persist()
+        }
+    }
+
+    private func detectSourceType(from sourceURL: String) -> MediaSourceType {
+        guard let host = URL(string: sourceURL)?.host?.lowercased() else {
+            return .youtube
+        }
+
+        if host.contains("tiktok") {
+            return .tiktok
+        }
+
+        if host.contains("facebook") || host.contains("fb.watch") {
+            return .facebook
+        }
+
+        return .youtube
     }
 
     private func isTransient(_ error: Error) -> Bool {

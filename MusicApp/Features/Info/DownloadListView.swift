@@ -6,10 +6,12 @@ struct DownloadListView: View {
 
     @State private var selectedJob: DownloadJob?
     @State private var pendingCancelJob: DownloadJob?
+    @State private var pendingRequeueJob: DownloadJob?
+    @State private var requeueTitleDraft: String = ""
 
     private var inProgressJobs: [DownloadJob] {
         downloadCenter.jobs.filter {
-            $0.state == .queued || $0.state == .processing || $0.state == .downloading || $0.state == .paused
+            $0.state == .queued || $0.state == .processing || $0.state == .ready || $0.state == .downloading || $0.state == .paused
         }
     }
 
@@ -76,6 +78,29 @@ struct DownloadListView: View {
         } message: { _ in
             Text(localizationViewModel.t("downloads.cancel.confirm.message"))
         }
+        .alert(
+            "Thêm vào hàng đợi",
+            isPresented: Binding(
+                get: { pendingRequeueJob != nil },
+                set: { if !$0 { pendingRequeueJob = nil } }
+            )
+        ) {
+            TextField("Tên file", text: $requeueTitleDraft)
+            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
+                pendingRequeueJob = nil
+            }
+            Button("Thêm") {
+                guard let job = pendingRequeueJob else { return }
+                let title = requeueTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                downloadCenter.queueReadyJobForDownload(
+                    jobID: job.id,
+                    title: title.isEmpty ? job.title : title
+                )
+                pendingRequeueJob = nil
+            }
+        } message: {
+            Text("Bạn có thể sửa tên trước khi thêm lại hàng đợi tải.")
+        }
         .sheet(item: $selectedJob) { job in
             DownloadJobDetailSheet(job: job)
                 .environmentObject(localizationViewModel)
@@ -103,6 +128,10 @@ struct DownloadListView: View {
                     },
                     onRetry: {
                         downloadCenter.retry(jobID: job.id)
+                    },
+                    onRequeue: {
+                        pendingRequeueJob = job
+                        requeueTitleDraft = job.title
                     }
                 )
                 .contentShape(Rectangle())
@@ -119,12 +148,13 @@ private struct DownloadJobRow: View {
     let onPauseResume: () -> Void
     let onCancel: () -> Void
     let onRetry: () -> Void
+    let onRequeue: () -> Void
 
     private var progress: Double {
         switch job.state {
         case .queued:
             return 0
-        case .processing:
+        case .processing, .ready:
             return Double(job.jobProgressPercent) / 100
         case .downloading, .completed:
             return job.downloadProgress
@@ -172,6 +202,8 @@ private struct DownloadJobRow: View {
                 Button(action: onPauseResume) { Image(systemName: "play.fill") }
             case .failed:
                 Button(action: onRetry) { Image(systemName: "arrow.clockwise") }
+            case .ready:
+                Button(action: onRequeue) { Image(systemName: "plus.circle") }
             default:
                 EmptyView()
             }
@@ -187,6 +219,7 @@ private struct DownloadJobRow: View {
         switch job.state {
         case .queued: return "clock.arrow.circlepath"
         case .processing: return "gearshape.2.fill"
+        case .ready: return "checkmark.seal.fill"
         case .downloading: return "arrow.down.circle.fill"
         case .paused: return "pause.circle.fill"
         case .completed: return "checkmark.circle.fill"
@@ -197,6 +230,7 @@ private struct DownloadJobRow: View {
 
     private var iconColor: Color {
         switch job.state {
+        case .ready: return .green
         case .completed: return .green
         case .failed: return .orange
         case .paused: return .yellow
