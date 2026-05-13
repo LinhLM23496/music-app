@@ -34,8 +34,9 @@ final class PlaylistStore: ObservableObject {
 
     func addSong(_ song: Song, to playlistID: UUID) {
         guard let playlistIndex = playlists.firstIndex(where: { $0.id == playlistID }) else { return }
-        if !playlists[playlistIndex].songIDs.contains(song.id) {
-            playlists[playlistIndex].songIDs.append(song.id)
+        let legacyID = song.id.uuidString
+        if !playlists[playlistIndex].songIDs.contains(song.stableID) && !playlists[playlistIndex].songIDs.contains(legacyID) {
+            playlists[playlistIndex].songIDs.append(song.stableID)
             playlists[playlistIndex].coverSymbol = song.coverSymbol
         }
     }

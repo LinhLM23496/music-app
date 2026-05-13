@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -32,6 +33,15 @@ struct ContentView: View {
 
         let playbackPersistence = UserDefaultsPlaybackPersistence()
         let playerEngine = AVPlayerEngine()
+        let mergeSongs: ([Song], [Song]) -> [Song] = { primary, secondary in
+            var merged = primary
+            var seenStableIDs = Set(primary.map(\.stableID))
+            for song in secondary where !seenStableIDs.contains(song.stableID) {
+                merged.append(song)
+                seenStableIDs.insert(song.stableID)
+            }
+            return merged
+        }
 
         let playbackController = PlaybackController(
             playerEngine: playerEngine,
@@ -42,10 +52,7 @@ struct ContentView: View {
             availableTracksProvider: {
                 let librarySongs = libraryViewModel.tracks
                 let importedSongs = importViewModel.importedSongs
-                var combined = librarySongs
-                let existingIDs = Set(combined.map(\.id))
-                combined.append(contentsOf: importedSongs.filter { !existingIDs.contains($0.id) })
-                return combined
+                return mergeSongs(librarySongs, importedSongs)
             },
             favoriteTracksProvider: {
                 let favoriteIDs = libraryViewModel.favoriteIDs
@@ -53,10 +60,7 @@ struct ContentView: View {
 
                 let libraryFavorites = libraryViewModel.tracks.filter { favoriteIDs.contains($0.id) }
                 let importedFavorites = importViewModel.importedSongs.filter { favoriteIDs.contains($0.id) }
-                var combined = libraryFavorites
-                let existingIDs = Set(combined.map(\.id))
-                combined.append(contentsOf: importedFavorites.filter { !existingIDs.contains($0.id) })
-                return combined
+                return mergeSongs(libraryFavorites, importedFavorites)
             }
         )
 
@@ -179,18 +183,42 @@ struct ContentView: View {
             if scenePhase == .active {
                 playbackController.restoreSnapshotIfNeeded()
             }
+            syncPlaylistSongs()
+        }
+        .onReceive(
+            Publishers.CombineLatest(
+                libraryViewModel.$tracks,
+                importViewModel.$importedTracks
+            )
+        ) { _, _ in
+            syncPlaylistSongs()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 DispatchQueue.main.async {
                     playbackController.restoreSnapshotIfNeeded()
                 }
+                syncPlaylistSongs()
             } else if newPhase == .inactive || newPhase == .background {
                 DispatchQueue.main.async {
                     playbackController.saveSnapshot()
                 }
             }
         }
+    }
+
+    private func syncPlaylistSongs() {
+        playlistViewModel.syncSongs(with: mergeSongs(libraryViewModel.tracks, importViewModel.importedSongs))
+    }
+
+    private func mergeSongs(_ primary: [Song], _ secondary: [Song]) -> [Song] {
+        var merged = primary
+        var seenStableIDs = Set(primary.map(\.stableID))
+        for song in secondary where !seenStableIDs.contains(song.stableID) {
+            merged.append(song)
+            seenStableIDs.insert(song.stableID)
+        }
+        return merged
     }
 }
 

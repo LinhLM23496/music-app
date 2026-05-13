@@ -27,6 +27,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
 struct Song: Identifiable, Hashable {
     let id: UUID
+    let stableID: String
     let titleEN: String
     let titleVI: String
     let artist: String
@@ -43,7 +44,7 @@ struct Playlist: Identifiable, Hashable {
     var nameEN: String
     var nameVI: String
     var coverSymbol: String
-    var songIDs: [UUID]
+    var songIDs: [String]
 }
 
 struct LocalAudioTrack: Identifiable, Hashable {

@@ -186,7 +186,38 @@ final class UserDefaultsPlaylistRepository: PlaylistRepository {
         let nameEN: String
         let nameVI: String
         let coverSymbol: String
-        let songIDs: [UUID]
+        let songIDs: [String]
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case nameEN
+            case nameVI
+            case coverSymbol
+            case songIDs
+        }
+
+        init(id: UUID, nameEN: String, nameVI: String, coverSymbol: String, songIDs: [String]) {
+            self.id = id
+            self.nameEN = nameEN
+            self.nameVI = nameVI
+            self.coverSymbol = coverSymbol
+            self.songIDs = songIDs
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            nameEN = try container.decode(String.self, forKey: .nameEN)
+            nameVI = try container.decode(String.self, forKey: .nameVI)
+            coverSymbol = try container.decode(String.self, forKey: .coverSymbol)
+
+            if let stableIDs = try? container.decode([String].self, forKey: .songIDs) {
+                songIDs = stableIDs
+            } else {
+                let legacyIDs = (try? container.decode([UUID].self, forKey: .songIDs)) ?? []
+                songIDs = legacyIDs.map(\.uuidString)
+            }
+        }
     }
 
     private let defaults: UserDefaults
@@ -245,6 +276,7 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
 
     private struct SongPayload: Decodable {
         let id: UUID
+        let stableID: String?
         let titleEN: String
         let titleVI: String
         let artist: String
@@ -260,7 +292,30 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
         let nameEN: String
         let nameVI: String
         let coverSymbol: String
-        let songIDs: [UUID]
+        let songIDs: [String]
+
+        private enum CodingKeys: String, CodingKey {
+            case id
+            case nameEN
+            case nameVI
+            case coverSymbol
+            case songIDs
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            nameEN = try container.decode(String.self, forKey: .nameEN)
+            nameVI = try container.decode(String.self, forKey: .nameVI)
+            coverSymbol = try container.decode(String.self, forKey: .coverSymbol)
+
+            if let stableIDs = try? container.decode([String].self, forKey: .songIDs) {
+                songIDs = stableIDs
+            } else {
+                let legacyIDs = (try? container.decode([UUID].self, forKey: .songIDs)) ?? []
+                songIDs = legacyIDs.map(\.uuidString)
+            }
+        }
     }
 
     func loadInitialCatalog() -> InitialCatalogData {
@@ -274,6 +329,7 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
         let songs = payload.songs.map { item in
             Song(
                 id: item.id,
+                stableID: Self.normalizedStableID(item.stableID ?? item.audioFileName),
                 titleEN: item.titleEN,
                 titleVI: item.titleVI,
                 artist: item.artist,
@@ -287,6 +343,7 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
         }
 
         let songIDSet = Set(songs.map(\.id))
+        let stableSongIDSet = Set(songs.map(\.stableID))
         let featured = payload.featuredSongIDs.filter { songIDSet.contains($0) }
 
         let playlists = payload.playlists.map { item in
@@ -295,7 +352,7 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
                 nameEN: item.nameEN,
                 nameVI: item.nameVI,
                 coverSymbol: item.coverSymbol,
-                songIDs: item.songIDs.filter { songIDSet.contains($0) }
+                songIDs: item.songIDs.filter { stableSongIDSet.contains($0) }
             )
         }
 
@@ -354,5 +411,9 @@ struct MockMusicCatalogProvider: MusicCatalogProviding {
         default:
             return .gray
         }
+    }
+
+    private static func normalizedStableID(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

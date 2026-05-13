@@ -153,8 +153,10 @@ final class ImportViewModel: ObservableObject {
     }
 
     func songForImportedTrack(_ track: LocalAudioTrack) -> Song {
-        Song(
-            id: stableSongID(forLocalPath: track.url.path),
+        let id = stableSongID(forLocalPath: track.url.path)
+        return Song(
+            id: id,
+            stableID: Self.normalizedStableID(track.fileName),
             titleEN: track.displayName,
             titleVI: track.displayName,
             artist: localized("device.artist"),
@@ -278,6 +280,10 @@ final class ImportViewModel: ObservableObject {
         return values?.contentModificationDate ?? values?.creationDate ?? .distantPast
     }
 
+    private static func normalizedStableID(_ raw: String) -> String {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
 }
 
 @MainActor
@@ -313,7 +319,7 @@ final class PlaylistViewModel: ObservableObject {
     }
 
     func toggleSong(_ song: Song, in playlistID: UUID) -> Bool {
-        if containsSong(song.id, in: playlistID) {
+        if containsSong(song, in: playlistID) {
             playlists = playlistUseCases.removeSong(song, from: playlistID, in: playlists)
             playlistRepository.savePlaylists(playlists)
             return false
@@ -324,9 +330,9 @@ final class PlaylistViewModel: ObservableObject {
         return true
     }
 
-    func containsSong(_ songID: UUID, in playlistID: UUID) -> Bool {
+    func containsSong(_ song: Song, in playlistID: UUID) -> Bool {
         guard let playlist = playlists.first(where: { $0.id == playlistID }) else { return false }
-        return playlist.songIDs.contains(songID)
+        return playlist.songIDs.contains(song.stableID) || playlist.songIDs.contains(song.id.uuidString)
     }
 
     func removeSong(_ song: Song, from playlistID: UUID) {
@@ -345,5 +351,30 @@ final class PlaylistViewModel: ObservableObject {
 
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {
         playlistUseCases.songs(in: playlist, allSongs: allSongs)
+    }
+
+    func syncSongs(with allSongs: [Song]) {
+        let legacyToStableID = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.id.uuidString, $0.stableID) })
+        let validSongIDs = Set(allSongs.map(\.stableID))
+        let synced = playlists.map { playlist in
+            var next = playlist
+            var normalizedIDs: [String] = []
+            for id in playlist.songIDs {
+                if validSongIDs.contains(id) {
+                    normalizedIDs.append(id)
+                } else if let migrated = legacyToStableID[id] {
+                    normalizedIDs.append(migrated)
+                }
+            }
+            next.songIDs = Array(NSOrderedSet(array: normalizedIDs)) as? [String] ?? normalizedIDs
+            if next.songIDs.isEmpty {
+                next.coverSymbol = "music.note.list"
+            }
+            return next
+        }
+
+        guard synced != playlists else { return }
+        playlists = synced
+        playlistRepository.savePlaylists(playlists)
     }
 }

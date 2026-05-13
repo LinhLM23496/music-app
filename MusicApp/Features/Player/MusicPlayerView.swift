@@ -378,8 +378,8 @@ private struct PlaylistPickerSheet: View {
 
                             Spacer()
 
-                            Image(systemName: playlistViewModel.containsSong(song.id, in: playlist.id) ? "checkmark.circle.fill" : "plus.circle.fill")
-                                .foregroundStyle(playlistViewModel.containsSong(song.id, in: playlist.id) ? .green : .secondary)
+                            Image(systemName: playlistViewModel.containsSong(song, in: playlist.id) ? "checkmark.circle.fill" : "plus.circle.fill")
+                                .foregroundStyle(playlistViewModel.containsSong(song, in: playlist.id) ? .green : .secondary)
                         }
                     }
                     .buttonStyle(.plain)

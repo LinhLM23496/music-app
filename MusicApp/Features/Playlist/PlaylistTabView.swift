@@ -189,8 +189,11 @@ struct PlaylistTabView: View {
 
     private func refreshAllSongs() {
         var combined = libraryViewModel.tracks
-        let existingIDs = Set(combined.map(\.id))
-        combined.append(contentsOf: importViewModel.importedSongs.filter { !existingIDs.contains($0.id) })
+        var seenStableIDs = Set(combined.map(\.stableID))
+        for song in importViewModel.importedSongs where !seenStableIDs.contains(song.stableID) {
+            combined.append(song)
+            seenStableIDs.insert(song.stableID)
+        }
         allSongs = combined
     }
 }
@@ -204,7 +207,7 @@ struct AddSongToPlaylistView: View {
     @EnvironmentObject private var libraryViewModel: LibraryViewModel
     @Environment(\.dismiss) private var dismiss
 
-    private var selectedSongIDs: Set<UUID> {
+    private var selectedSongIDs: Set<String> {
         let ids = playlistViewModel.playlists
             .first(where: { $0.id == playlist.id })?
             .songIDs ?? []
@@ -220,9 +223,9 @@ struct AddSongToPlaylistView: View {
                 } label: {
                     HStack(spacing: 10) {
                         SongRowView(song: song, title: localizationViewModel.songTitle(song), isFavorite: libraryViewModel.favoriteIDs.contains(song.id))
-                        Image(systemName: selectedSongIDs.contains(song.id) ? "checkmark.circle.fill" : "circle")
+                        Image(systemName: selectedSongIDs.contains(song.stableID) ? "checkmark.circle.fill" : "circle")
                             .font(.title3)
-                            .foregroundStyle(selectedSongIDs.contains(song.id) ? .green : .secondary)
+                            .foregroundStyle(selectedSongIDs.contains(song.stableID) ? .green : .secondary)
                     }
                 }
                 .buttonStyle(.plain)

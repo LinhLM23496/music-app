@@ -49,8 +49,9 @@ struct PlaylistUseCases {
         }
 
         var next = playlists
-        if !next[playlistIndex].songIDs.contains(song.id) {
-            next[playlistIndex].songIDs.append(song.id)
+        let legacyID = song.id.uuidString
+        if !next[playlistIndex].songIDs.contains(song.stableID) && !next[playlistIndex].songIDs.contains(legacyID) {
+            next[playlistIndex].songIDs.append(song.stableID)
             next[playlistIndex].coverSymbol = song.coverSymbol
         }
         return next
@@ -62,7 +63,8 @@ struct PlaylistUseCases {
         }
 
         var next = playlists
-        next[playlistIndex].songIDs.removeAll { $0 == song.id }
+        let legacyID = song.id.uuidString
+        next[playlistIndex].songIDs.removeAll { $0 == song.stableID || $0 == legacyID }
         if next[playlistIndex].songIDs.isEmpty {
             next[playlistIndex].coverSymbol = "music.note.list"
         }
@@ -70,7 +72,14 @@ struct PlaylistUseCases {
     }
 
     func songs(in playlist: Playlist, allSongs: [Song]) -> [Song] {
-        let map = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.id, $0) })
+        var map: [String: Song] = [:]
+        for song in allSongs {
+            // Keep the first encountered song for a stableID to avoid crashes
+            // when two sources contain the same file name.
+            if map[song.stableID] == nil {
+                map[song.stableID] = song
+            }
+        }
         return playlist.songIDs.compactMap { map[$0] }
     }
 
