@@ -100,7 +100,7 @@ struct LiveMediaJobService: MediaJobServicing {
         let endpoint = MediaJobEndpoints.getJobDownload(jobID: jobID, filename: preferredFileName)
         return try await apiClient.downloadFile(
             endpoint,
-            preferredFileName: nil,
+            preferredFileName: preferredFileName,
             onProgress: onProgress
         )
     }

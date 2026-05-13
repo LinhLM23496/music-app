@@ -379,7 +379,11 @@ final class DownloadCenter: ObservableObject {
 
     private func sanitizedTitleForFilename(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "download" : String(trimmed.prefix(80))
+        let base = trimmed.isEmpty ? "download" : String(trimmed.prefix(80))
+        if URL(fileURLWithPath: base).pathExtension.isEmpty {
+            return "\(base).mp3"
+        }
+        return base
     }
 
     private func isTransient(_ error: Error) -> Bool {
