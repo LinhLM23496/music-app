@@ -133,7 +133,10 @@ final class ImportViewModel: ObservableObject {
                     return
                 }
 
-                var mergedByPath = Dictionary(uniqueKeysWithValues: self.importedTracks.map { ($0.url.path, $0) })
+                var mergedByPath: [String: LocalAudioTrack] = [:]
+                for track in self.importedTracks {
+                    mergedByPath[track.url.path] = track
+                }
                 for track in finalizedImportedResults {
                     mergedByPath[track.url.path] = track
                 }
@@ -354,7 +357,10 @@ final class PlaylistViewModel: ObservableObject {
     }
 
     func syncSongs(with allSongs: [Song]) {
-        let legacyToStableID = Dictionary(uniqueKeysWithValues: allSongs.map { ($0.id.uuidString, $0.stableID) })
+        var legacyToStableID: [String: String] = [:]
+        for song in allSongs {
+            legacyToStableID[song.id.uuidString] = song.stableID
+        }
         let validSongIDs = Set(allSongs.map(\.stableID))
         let synced = playlists.map { playlist in
             var next = playlist
