@@ -3,11 +3,14 @@ import SwiftUI
 struct DownloadListView: View {
     @EnvironmentObject private var localizationViewModel: LocalizationViewModel
     @EnvironmentObject private var downloadCenter: DownloadCenter
+    @EnvironmentObject private var importViewModel: ImportViewModel
 
     @State private var selectedJob: DownloadJob?
     @State private var pendingCancelJob: DownloadJob?
     @State private var pendingRequeueJob: DownloadJob?
     @State private var requeueTitleDraft: String = ""
+    @State private var importToastMessage: String?
+    @State private var importToastWorkItem: DispatchWorkItem?
 
     private var inProgressJobs: [DownloadJob] {
         downloadCenter.jobs.filter {
@@ -55,6 +58,8 @@ struct DownloadListView: View {
                     Button(localizationViewModel.t("downloads.action.pause.all")) { downloadCenter.pauseAll() }
                     Button(localizationViewModel.t("downloads.action.resume.all")) { downloadCenter.resumeAll() }
                     Button(localizationViewModel.t("downloads.clear.completed")) { downloadCenter.clearCompleted() }
+                    Button("Thử lại lỗi") { downloadCenter.retryFailed() }
+                    Button("Xóa lỗi", role: .destructive) { downloadCenter.clearFailed() }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -106,6 +111,14 @@ struct DownloadListView: View {
                 .environmentObject(localizationViewModel)
                 .presentationDetents([.medium, .large])
         }
+        .overlay(alignment: .top) {
+            if let importToastMessage {
+                AppToastView(message: importToastMessage)
+                    .padding(.top, 14)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: importToastMessage != nil)
     }
 
     @ViewBuilder
@@ -132,6 +145,14 @@ struct DownloadListView: View {
                     onRequeue: {
                         pendingRequeueJob = job
                         requeueTitleDraft = job.title
+                    },
+                    onImport: {
+                        guard let localFilePath = job.localFilePath else { return }
+                        let fileURL = URL(fileURLWithPath: localFilePath)
+                        importViewModel.importAudioFiles(from: [fileURL]) { result in
+                            guard result.importedCount > 0 else { return }
+                            showImportToast("Đã import vào thư viện")
+                        }
                     }
                 )
                 .contentShape(Rectangle())
@@ -141,6 +162,17 @@ struct DownloadListView: View {
             }
         }
     }
+
+    private func showImportToast(_ message: String) {
+        importToastWorkItem?.cancel()
+        importToastMessage = message
+
+        let workItem = DispatchWorkItem {
+            importToastMessage = nil
+        }
+        importToastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: workItem)
+    }
 }
 
 private struct DownloadJobRow: View {
@@ -149,6 +181,7 @@ private struct DownloadJobRow: View {
     let onCancel: () -> Void
     let onRetry: () -> Void
     let onRequeue: () -> Void
+    let onImport: () -> Void
 
     private var progress: Double {
         switch job.state {
@@ -204,6 +237,8 @@ private struct DownloadJobRow: View {
                 Button(action: onRetry) { Image(systemName: "arrow.clockwise") }
             case .ready:
                 Button(action: onRequeue) { Image(systemName: "plus.circle") }
+            case .completed:
+                Button(action: onImport) { Image(systemName: "square.and.arrow.down") }
             default:
                 EmptyView()
             }
