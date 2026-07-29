@@ -13,34 +13,72 @@ struct DownloadListView: View {
     @State private var importToastWorkItem: DispatchWorkItem?
 
     private var inProgressJobs: [DownloadJob] {
-        downloadCenter.jobs.filter {
-            $0.state == .queued || $0.state == .processing || $0.state == .ready || $0.state == .downloading || $0.state == .paused
+        let jobs: [DownloadJob] = downloadCenter.jobs
+        let filtered: [DownloadJob] = jobs.filter { job in
+            let state = job.state
+            return state == .queued
+                || state == .processing
+                || state == .ready
+                || state == .downloading
+                || state == .paused
         }
+        return filtered
     }
 
     private var failedJobs: [DownloadJob] {
-        downloadCenter.jobs.filter { $0.state == .failed }
+        let jobs: [DownloadJob] = downloadCenter.jobs
+        let filtered: [DownloadJob] = jobs.filter { job in
+            job.state == .failed
+        }
+        return filtered
     }
 
     private var completedJobs: [DownloadJob] {
-        downloadCenter.jobs.filter { $0.state == .completed }
+        let jobs: [DownloadJob] = downloadCenter.jobs
+        let filtered: [DownloadJob] = jobs.filter { job in
+            job.state == .completed
+        }
+        return filtered
     }
 
     var body: some View {
-        List {
-            if !inProgressJobs.isEmpty {
-                section(title: localizationViewModel.t("downloads.section.active"), jobs: inProgressJobs)
+        // Keep the base view simple to help type-checker
+        baseContentView
+            .toolbar { trailingMenu }
+            .alertsAndSheets
+            .overlayToast(importToastMessage: importToastMessage)
+            .animation(.easeInOut(duration: 0.22), value: importToastMessage != nil)
+    }
+
+    // A simple base content view
+    private var baseContentView: some View {
+        listContent
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle(localizationViewModel.t("downloads.title"))
+    }
+
+    // Split out List builder to reduce type-checker load
+    private var listContent: some View {
+        let active: [DownloadJob] = inProgressJobs
+        let failed: [DownloadJob] = failedJobs
+        let completed: [DownloadJob] = completedJobs
+
+        return List {
+            if !active.isEmpty {
+                section(title: localizationViewModel.t("downloads.section.active"), jobs: active)
             }
 
-            if !failedJobs.isEmpty {
-                section(title: localizationViewModel.t("downloads.section.failed"), jobs: failedJobs)
+            if !failed.isEmpty {
+                section(title: localizationViewModel.t("downloads.section.failed"), jobs: failed)
             }
 
-            if !completedJobs.isEmpty {
-                section(title: localizationViewModel.t("downloads.section.completed"), jobs: completedJobs)
+            if !completed.isEmpty {
+                section(title: localizationViewModel.t("downloads.section.completed"), jobs: completed)
             }
 
-            if inProgressJobs.isEmpty && failedJobs.isEmpty && completedJobs.isEmpty {
+            if active.isEmpty && failed.isEmpty && completed.isEmpty {
                 Text(localizationViewModel.t("downloads.empty"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -48,118 +86,79 @@ struct DownloadListView: View {
                     .listRowSeparator(.hidden)
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Color.black.ignoresSafeArea())
-        .navigationTitle(localizationViewModel.t("downloads.title"))
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu {
-                    Button(localizationViewModel.t("downloads.action.pause.all")) { downloadCenter.pauseAll() }
-                    Button(localizationViewModel.t("downloads.action.resume.all")) { downloadCenter.resumeAll() }
-                    Button(localizationViewModel.t("downloads.clear.completed")) { downloadCenter.clearCompleted() }
-                    Button("Thử lại lỗi") { downloadCenter.retryFailed() }
-                    Button("Xóa lỗi", role: .destructive) { downloadCenter.clearFailed() }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+    }
+
+    // Extract toolbar to reduce generic depth in body
+    @ToolbarContentBuilder
+    private var trailingMenu: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Menu {
+                Button(localizationViewModel.t("downloads.action.pause.all")) { downloadCenter.pauseAll() }
+                Button(localizationViewModel.t("downloads.action.resume.all")) { downloadCenter.resumeAll() }
+                Button(localizationViewModel.t("downloads.clear.completed")) { downloadCenter.clearCompleted() }
+                Button("Thử lại lỗi") {
+                    for job in downloadCenter.failedJobs {
+                        downloadCenter.retry(jobID: job.id)
+                    }
                 }
+                Button("Xóa lỗi", role: .destructive) {
+                    // No clearFailed() API exists; change failed items to canceled
+                    for job in downloadCenter.failedJobs {
+                        downloadCenter.cancel(jobID: job.id, deleteFile: false)
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
         }
-        .alert(
-            localizationViewModel.t("downloads.cancel.confirm.title"),
-            isPresented: Binding(
-                get: { pendingCancelJob != nil },
-                set: { if !$0 { pendingCancelJob = nil } }
-            ),
-            presenting: pendingCancelJob
-        ) { job in
-            Button(localizationViewModel.t("downloads.cancel.confirm.button"), role: .destructive) {
-                downloadCenter.cancel(jobID: job.id, deleteFile: false)
-                pendingCancelJob = nil
-            }
-            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
-                pendingCancelJob = nil
-            }
-        } message: { _ in
-            Text(localizationViewModel.t("downloads.cancel.confirm.message"))
-        }
-        .alert(
-            "Thêm vào hàng đợi",
-            isPresented: Binding(
-                get: { pendingRequeueJob != nil },
-                set: { if !$0 { pendingRequeueJob = nil } }
-            )
-        ) {
-            TextField("Tên file", text: $requeueTitleDraft)
-            Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
-                pendingRequeueJob = nil
-            }
-            Button("Thêm") {
-                guard let job = pendingRequeueJob else { return }
-                let title = requeueTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                downloadCenter.queueReadyJobForDownload(
-                    jobID: job.id,
-                    title: title.isEmpty ? job.title : title
-                )
-                pendingRequeueJob = nil
-            }
-        } message: {
-            Text("Bạn có thể sửa tên trước khi thêm lại hàng đợi tải.")
-        }
-        .sheet(item: $selectedJob) { job in
-            DownloadJobDetailSheet(job: job)
-                .environmentObject(localizationViewModel)
-                .presentationDetents([.medium, .large])
-        }
-        .overlay(alignment: .top) {
-            if let importToastMessage {
-                AppToastView(message: importToastMessage)
-                    .padding(.top, 14)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.22), value: importToastMessage != nil)
     }
 
     @ViewBuilder
     private func section(title: String, jobs: [DownloadJob]) -> some View {
         Section(title) {
             ForEach(jobs) { job in
+                let onPauseResume = { self.onPauseResume(for: job) }
+                let onCancel = { self.pendingCancelJob = job }
+                let onRetry = { self.downloadCenter.retry(jobID: job.id) }
+                let onRequeue = {
+                    self.pendingRequeueJob = job
+                    self.requeueTitleDraft = job.title
+                }
+                let onImport = { self.importIfPossible(job) }
+
                 DownloadJobRow(
                     job: job,
-                    onPauseResume: {
-                        if job.state == .paused {
-                            downloadCenter.resume(jobID: job.id)
-                        } else if job.state == .downloading || job.state == .processing {
-                            downloadCenter.pause(jobID: job.id)
-                        } else {
-                            downloadCenter.retry(jobID: job.id)
-                        }
-                    },
-                    onCancel: {
-                        pendingCancelJob = job
-                    },
-                    onRetry: {
-                        downloadCenter.retry(jobID: job.id)
-                    },
-                    onRequeue: {
-                        pendingRequeueJob = job
-                        requeueTitleDraft = job.title
-                    },
-                    onImport: {
-                        guard let localFilePath = job.localFilePath else { return }
-                        let fileURL = URL(fileURLWithPath: localFilePath)
-                        importViewModel.importAudioFiles(from: [fileURL]) { result in
-                            guard result.importedCount > 0 else { return }
-                            showImportToast("Đã import vào thư viện")
-                        }
-                    }
+                    onPauseResume: onPauseResume,
+                    onCancel: onCancel,
+                    onRetry: onRetry,
+                    onRequeue: onRequeue,
+                    onImport: onImport
                 )
                 .contentShape(Rectangle())
                 .onTapGesture { selectedJob = job }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
             }
+        }
+    }
+
+    private func onPauseResume(for job: DownloadJob) {
+        switch job.state {
+        case .paused:
+            downloadCenter.resume(jobID: job.id)
+        case .downloading, .processing:
+            downloadCenter.pause(jobID: job.id)
+        default:
+            downloadCenter.retry(jobID: job.id)
+        }
+    }
+
+    private func importIfPossible(_ job: DownloadJob) {
+        guard let localFilePath = job.localFilePath else { return }
+        let fileURL = URL(fileURLWithPath: localFilePath)
+        importViewModel.importAudioFiles(from: [fileURL]) { result in
+            guard result.importedCount > 0 else { return }
+            showImportToast("Đã import vào thư viện")
         }
     }
 
@@ -172,6 +171,130 @@ struct DownloadListView: View {
         }
         importToastWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: workItem)
+    }
+}
+
+// MARK: - Modifiers extracted to reduce body complexity
+
+private extension View {
+    var alertsAndSheets: some View {
+        modifier(DownloadListAlertsAndSheetsModifier())
+    }
+
+    func overlayToast(importToastMessage: String?) -> some View {
+        modifier(DownloadListToastOverlayModifier(importToastMessage: importToastMessage))
+    }
+}
+
+private struct DownloadListAlertsAndSheetsModifier: ViewModifier {
+    @EnvironmentObject private var localizationViewModel: LocalizationViewModel
+    @EnvironmentObject private var downloadCenter: DownloadCenter
+
+    @State private var pendingCancelJob: DownloadJob?
+    @State private var pendingRequeueJob: DownloadJob?
+    @State private var requeueTitleDraft: String = ""
+    @State private var selectedJob: DownloadJob?
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                localizationViewModel.t("downloads.cancel.confirm.title"),
+                isPresented: Binding(
+                    get: { pendingCancelJob != nil },
+                    set: { if !$0 { pendingCancelJob = nil } }
+                ),
+                presenting: pendingCancelJob
+            ) { job in
+                Button(localizationViewModel.t("downloads.cancel.confirm.button"), role: .destructive) {
+                    downloadCenter.cancel(jobID: job.id, deleteFile: false)
+                    pendingCancelJob = nil
+                }
+                Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
+                    pendingCancelJob = nil
+                }
+            } message: { _ in
+                Text(localizationViewModel.t("downloads.cancel.confirm.message"))
+            }
+            .alert(
+                "Thêm vào hàng đợi",
+                isPresented: Binding(
+                    get: { pendingRequeueJob != nil },
+                    set: { if !$0 { pendingRequeueJob = nil } }
+                )
+            ) {
+                TextField("Tên file", text: $requeueTitleDraft)
+                Button(localizationViewModel.t("playlist.cancel"), role: .cancel) {
+                    pendingRequeueJob = nil
+                }
+                Button("Thêm") {
+                    guard let job = pendingRequeueJob else { return }
+                    let title = requeueTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                    downloadCenter.queueReadyJobForDownload(
+                        jobID: job.id,
+                        title: title.isEmpty ? job.title : title
+                    )
+                    pendingRequeueJob = nil
+                }
+            } message: {
+                Text("Bạn có thể sửa tên trước khi thêm lại hàng đợi tải.")
+            }
+            .sheet(item: $selectedJob) { job in
+                DownloadJobDetailSheet(job: job)
+                    .environmentObject(localizationViewModel)
+                    .presentationDetents([.medium, .large])
+            }
+            .environment(\.downloadListPendingCancelJob, $pendingCancelJob)
+            .environment(\.downloadListPendingRequeueJob, $pendingRequeueJob)
+            .environment(\.downloadListRequeueTitleDraft, $requeueTitleDraft)
+            .environment(\.downloadListSelectedJob, $selectedJob)
+    }
+}
+
+// Environment keys to pass bindings from row taps back into modifier
+private struct PendingCancelJobKey: EnvironmentKey {
+    static let defaultValue: Binding<DownloadJob?>? = nil
+}
+private struct PendingRequeueJobKey: EnvironmentKey {
+    static let defaultValue: Binding<DownloadJob?>? = nil
+}
+private struct RequeueTitleDraftKey: EnvironmentKey {
+    static let defaultValue: Binding<String>? = nil
+}
+private struct SelectedJobKey: EnvironmentKey {
+    static let defaultValue: Binding<DownloadJob?>? = nil
+}
+
+private extension EnvironmentValues {
+    var downloadListPendingCancelJob: Binding<DownloadJob?>? {
+        get { self[PendingCancelJobKey.self] }
+        set { self[PendingCancelJobKey.self] = newValue }
+    }
+    var downloadListPendingRequeueJob: Binding<DownloadJob?>? {
+        get { self[PendingRequeueJobKey.self] }
+        set { self[PendingRequeueJobKey.self] = newValue }
+    }
+    var downloadListRequeueTitleDraft: Binding<String>? {
+        get { self[RequeueTitleDraftKey.self] }
+        set { self[RequeueTitleDraftKey.self] = newValue }
+    }
+    var downloadListSelectedJob: Binding<DownloadJob?>? {
+        get { self[SelectedJobKey.self] }
+        set { self[SelectedJobKey.self] = newValue }
+    }
+}
+
+private struct DownloadListToastOverlayModifier: ViewModifier {
+    let importToastMessage: String?
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if let importToastMessage {
+                    AppToastView(message: importToastMessage)
+                        .padding(.top, 14)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
     }
 }
 
